@@ -45,43 +45,54 @@ struct status *get_status (int *array, int size) {
 	sta->num = num;
 	return sta;
 }
-struct status *next_permutation (int *array, int size) {
-	struct status *s = get_status (array, size);
-	enum direction *d = s->d;
+int *next_permutation (int *array, int size, struct status *s) {
+	enum direction *d;
 	int *index = (int *) malloc ((size + 1) * sizeof (int));
 	int i;
+	if (s == NULL) {
+		s = get_status (array, size);
+	}
+	d = s->d;
 	for (i = 0; i < size; i++) {
 		index[array[i]] = i;
 	}
+
 	for (i = size; i > 1; i--) {
 		if (d[i] == LEFT && index[i] != -1 && i > array[index[i] - 1]) {
 			swap (array + index[i], array + index[i] - 1);
 			index[i] = i - 1;
 			index[i - 1] = i;
-
+			break;
 		}
 		if (d[i] == RIGHT && index[i] != size && i > array[index[i] + 1]) {
 			swap (array + index[i], array + index[i] + 1);
 			index[i] = i + 1;
 			index[i + 1] = i;
+			break;
 		}
 	}
-	while (i <= size) {
-		d[i] = d[i] == LEFT ? RIGHT : LEFT;
-		i++;
+	if (i == 1) {
+		return NULL;
 	}
-	return  s;	
+	while (++i <= size) {
+		d[i] = d[i] == LEFT ? RIGHT : LEFT;
+	}
+	return  array;	
 }
+
 struct status *next_n_status (struct status *sta, int size, int n) {
 	int i = size;
 	int r = 0, q = n, c = 0;
-	while (q > 0) {
+	int s;
+	for (i = size; i > 1; i--) {
 		r = q % i;
 		q = q / i;
-		sta->num[i] = (sta->num[i] + r + c) % i;
-		c = (sta->num[i] + r + c) / i;
-		i--;
+		s = sta->num[i] + r + c;
+		sta->num[i] = s % i;
+		c = s / i;
 	}
+	if (c != 0 || q != 0)
+		return NULL;
 	sta->d[2] = LEFT;
 	for (i = 3; i <= size; i++)
 		if (i % 2) 
@@ -91,11 +102,13 @@ struct status *next_n_status (struct status *sta, int size, int n) {
 	
 	return sta;
 }
-void next_n_permutation (int *array, int size, int n, struct status *sta) {
-	int i = 0, j, c;
+int *next_n_permutation (int *array, int size, int n, struct status *sta) {
+	int i, j, c;
 	if (sta == NULL)
 		sta = get_status (array, size);
-	next_n_status (sta, size, n);
+	if (!next_n_status (sta, size, n)) {
+		return NULL;
+	}
 	for (i = 0; i < size; i++) {
 		array[i] = EMPTY;
 	}
@@ -108,6 +121,7 @@ void next_n_permutation (int *array, int size, int n, struct status *sta) {
 					c--;
 				j--;
 			}
+			array[j + 1] = i;
 		} else {
 			c = sta->num[i] + 1;
 			j = 0;
@@ -116,9 +130,10 @@ void next_n_permutation (int *array, int size, int n, struct status *sta) {
 					c--;
 				j++;
 			}
+			array[j - 1] = i;
 		}
-		array[j] = i;
 	}
+	return array;
 }
 
 void output (int *array, int size) {
@@ -135,14 +150,25 @@ void init (int *array, int size ) {
 	}
 }
 int main () {
-	int array[6];
+	int array[4];
 	struct status *sta = NULL;
-	int n = 20;
-	init (array, 6);
-	while (n) {
-		output (array, 6);
-		next_n_permutation (array, 6, 1, sta);
-		n--;
+	init (array, 4);
+	while (1) {
+		output (array, 4);
+		if (!next_permutation (array, 4, sta))
+			break;
 	}
+	/*
+	output (array, 1000);
+	next_n_permutation (array, 1000, 10, sta);
+	output (array, 1000);
+	next_n_permutation (array, 1000, -10, sta);
+	output (array, 1000);
+	next_n_permutation (array, 1000, 11, sta);
+	output (array, 1000);
+	next_n_permutation (array, 1000, -11, sta);
+	output (array, 1000);
+	*/
+
 	return 0;
 }
