@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #define EMPTY 0
+
 enum direction {
 	LEFT, RIGHT
 };
@@ -45,6 +46,7 @@ struct status *get_status (int *array, int size) {
 	sta->num = num;
 	return sta;
 }
+
 int *next_permutation (int *array, int size, struct status *s) {
 	enum direction *d;
 	int *index = (int *) malloc ((size + 1) * sizeof (int));
@@ -58,13 +60,13 @@ int *next_permutation (int *array, int size, struct status *s) {
 	}
 
 	for (i = size; i > 1; i--) {
-		if (d[i] == LEFT && index[i] != -1 && i > array[index[i] - 1]) {
+		if (d[i] == LEFT && index[i] != 0 && i > array[index[i] - 1]) {
 			swap (array + index[i], array + index[i] - 1);
 			index[i] = i - 1;
 			index[i - 1] = i;
 			break;
 		}
-		if (d[i] == RIGHT && index[i] != size && i > array[index[i] + 1]) {
+		if (d[i] == RIGHT && index[i] != size - 1 && i > array[index[i] + 1]) {
 			swap (array + index[i], array + index[i] + 1);
 			index[i] = i + 1;
 			index[i + 1] = i;
