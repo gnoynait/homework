@@ -79,6 +79,7 @@ int *next_permutation (int *array, int size, struct status *s) {
 	while (++i <= size) {
 		d[i] = d[i] == LEFT ? RIGHT : LEFT;
 	}
+	free (index);
 	return  array;	
 }
 
@@ -135,6 +136,7 @@ int *next_n_permutation (int *array, int size, int n, struct status *sta) {
 			array[j - 1] = i;
 		}
 	}
+	free (bit);
 	return array;
 }
 

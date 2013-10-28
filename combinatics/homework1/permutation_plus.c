@@ -32,11 +32,15 @@ int *new_full_bit(int size) {
 
 int findG(int *bit, int size, int cumFre){
 	int idx = 0;
-	unsigned bitMask = 0x80000000;
+	int bitMask = 0x40000000;
 	while (!(bitMask & size)) 
-		bitMask >>= 1;
+		bitMask = bitMask >> 1;
 	 while ((bitMask != 0) && (idx <= size)){
 		 int tIdx = idx + bitMask;
+		if (tIdx > size) {
+			bitMask >>= 1;
+			continue;
+		}
 		 if (cumFre >= bit[tIdx]){
 			 idx = tIdx;
 			 cumFre -= bit[tIdx];
@@ -114,6 +118,7 @@ int *next_permutation (int *array, int size, struct status *s) {
 	while (++i <= size) {
 		d[i] = d[i] == LEFT ? RIGHT : LEFT;
 	}
+	free (index);
 	return  array;	
 }
 
@@ -164,6 +169,7 @@ int *next_n_permutation (int *array, int size, int n, struct status *sta) {
 		remove_space (bit, size, w);
 		nspace--;
 	}
+	free (bit);
 	return array;
 }
 
@@ -180,10 +186,12 @@ void init (int *array, int size ) {
 		array[i] = i + 1;
 	}
 }
-#define N 10
 int main () {
-	int array[N];
+	int *array;
 	struct status *sta = NULL;
+	int N;
+	scanf ("%d", &N);
+	array = (int *) malloc (sizeof (int) * (N + 1));
 	init (array, N);
 	while (1) {
 		output (array, N);
