@@ -3,7 +3,7 @@
 #include <vector>
 
 int nfeature = 2000; // feature number
-int niter = 100;     // iter times
+int niter = 200;     // iter times
 double alpha = 0.001;// step size
 double *w;           // model parameter w
 double b;            // model parameter b
@@ -17,6 +17,10 @@ struct Example {
 /* perceptron trainning step */
 template <class InputIterator>
 void train (InputIterator begin, InputIterator end) {
+	b = 0;
+	for (int i = 0; i < nfeature; i++) {
+		w[i] = 0;
+	}
 	for (int n = 0; n < niter; ++n) {
 		for (InputIterator it = begin; it != end; ++it) {
 			double p = b;
@@ -52,7 +56,9 @@ void predict (ForwardIterator begin, ForwardIterator end) {
 /* divide the data set to 5 parts, 4 to train and 1 to test. */
 template <class Iterator>
 void test (Iterator begin, Iterator end) {
-	printf ("test\tprecision\trecall  \tf1\n");
+	printf ("perceptron test\n");
+	printf ("id\tprecision\trecall  \tf1\n");
+	float sp = 0, sr = 0, sf1 = 0;
 	for (int i = 0; i < 5; ++i) { // test 5 times
 		int c = 0;
 		std::vector<Example> train_set, test_set;
@@ -83,10 +89,14 @@ void test (Iterator begin, Iterator end) {
 			}
 		}
 		float precision = 1.0 * tp / (tp + fp);
+		sp += precision;
 		float recall = 1.0 * tp / (tp + fn);
+		sr += recall;
 		float f1 = 2 * precision * recall / (precision+ recall);
+		sf1 += f1;
 		printf ("%d\t%f\t%f\t%f\n", i + 1, precision, recall, f1);
 	}
+	printf ("average\t%f\t%f\t%f\n", sp / 5, sr / 5, sf1 / 5);
 }
 
 
