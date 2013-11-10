@@ -85,7 +85,19 @@ struct status *get_status (int *array, int size) {
 	sta->num = num;
 	return sta;
 }
-
+struct status *init_status (int size) {
+	struct status *sta = (struct status *) malloc (sizeof (*sta));
+	enum direction *d = (enum direction *) malloc ((size + 1) * sizeof (enum direction));
+	int *num = (int *) malloc ((size + 1) * sizeof (int));
+	int i;
+	for (i = 0; i <= size; i++) {
+		num[i] = 0;
+		d[i] = LEFT;
+	}
+	sta->num = num;
+	sta->d = d;
+	return sta;
+}
 int *next_permutation (int *array, int size, struct status *s) {
 	enum direction *d;
 	int *index = (int *) malloc ((size + 1) * sizeof (int));
@@ -186,28 +198,23 @@ void init (int *array, int size ) {
 		array[i] = i + 1;
 	}
 }
-int main () {
+int main (int argc, char *argv[]) {
+	int n, m;
+	int i;
 	int *array;
 	struct status *sta = NULL;
-	int N;
-	scanf ("%d", &N);
-	array = (int *) malloc (sizeof (int) * (N + 1));
-	init (array, N);
-	while (1) {
-		output (array, N);
-		if (!next_n_permutation (array, N, 1, sta))
-			break;
+
+	n = atoi(argv[1]);
+	m = atoi(argv[2]);
+	array = (int *) malloc (sizeof (int) * n);
+	sta = init_status (n);
+	init (array, n);
+	for (i = 0; i < m; i++) {
+//		output (array, n);
+		int *next = next_n_permutation (array, n, 1, sta);
+		if (!next) {
+			init (array, n);
+		}
 	}
-	/*
-	output (array, N);
-	next_n_permutation (array, N, 10, sta);
-	output (array, N);
-	next_n_permutation (array, N, -10, sta);
-	output (array, N);
-	next_n_permutation (array, N, 11, sta);
-	output (array, N);
-	next_n_permutation (array, N, -11, sta);
-	output (array, N);
-	*/
 	return 0;
 }
