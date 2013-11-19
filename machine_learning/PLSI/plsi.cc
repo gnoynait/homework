@@ -1,5 +1,6 @@
 #include<iostream>
-#include<vector>
+#include<string>
+#include<cstdio>
 double *z_dw;
 double *z;
 double *d_z;
@@ -7,8 +8,9 @@ double *w_z;
 int    *ndw;
 int nd, nz, nw;
 int R;
+
 #define Z_DW(z, d, w) (z_dw[d * nw * nz + w * nz + z])
-#define Z(z) (z[z])
+#define Z(n) (z[n])
 #define D_Z(d, z) (d_z[z * nd + d])
 #define W_Z(w, z) (w_z[z * nw + w])
 #define NDW(d, w) (ndw[d * nw + w])
@@ -86,4 +88,21 @@ void step_m () {
 	}
 }
 
+void read () {
+	int i, w, n;
+	std::string line;
+	std::cin >> nd >> nw;
+	init_model ();
+	for (i = 0; i < nd; i++) {
+		std::stringstream ss (line);	
+		while (ss >> w >> n) {
+			NDW (i, w) += n;
+			R += n;
+		}
+	}
+}
+
+int main () {
+	read ();
+}
 
