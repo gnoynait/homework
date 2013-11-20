@@ -87,22 +87,35 @@ void step_m () {
 		Z(i) = mol / R;
 	}
 }
-
+#define MAXBUFFER
 void read () {
 	int i, w, n;
-	std::string line;
-	std::cin >> nd >> nw;
+	int c;
+	char buffer[MAXBUFFER];
+	scanf ("%d%d\n", &nd, &nw);
 	init_model ();
+	while ((c = fgetc (stdin)) != '\n' && c != EOF)
+		;
 	for (i = 0; i < nd; i++) {
-		std::stringstream ss (line);	
-		while (ss >> w >> n) {
+		fgets (buffer, MAXBUFFER, stdin);
+		while (sscanf (buffer, "%d:%d", &w, &n) == 2) {
 			NDW (i, w) += n;
 			R += n;
 		}
 	}
 }
-
-int main () {
+void output () {
+	int i, j;
+	for (i = 0; i < nd; i++) {
+		for (j = 0; j < nw; j++) {
+			printf ("%d ", NDW (i, j));
+		}
+		printf ("\n");
+	}
+}
+int main (int argc, char *argv[]) {
+	nz = atoi (argv[1]);
 	read ();
+	output ();
 }
 
