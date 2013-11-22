@@ -1,6 +1,7 @@
 #include<iostream>
 #include<string>
 #include<cstdio>
+#include<cmath>
 #include<cstdlib>
 #include<sstream>
 double *z_dw;
@@ -10,7 +11,7 @@ double *w_z;
 int    *ndw;
 int nd, nz, nw;
 int R;
-
+const double epsilon = 0.005;
 #define Z_DW(z, d, w) (z_dw[d * nw * nz + w * nz + z])
 #define Z(n) (z[n])
 #define D_Z(d, z) (d_z[z * nd + d])
@@ -89,16 +90,27 @@ void step_m () {
 		Z(i) = mol / R;
 	}
 }
+double compute_likelyhood () {
+	int i, j, k;
+	double s = 0, p_dw = 0;
+	for (i = 0; i < nd; i++) {
+		for (j = 0; j < nw; j++) {
+			p_dw = 0;
+			for (k = 0; k < nz; k++) {
+				p_dw += W_Z (j, k) * D_Z (i, k) * Z (k);
+			}
+			s += NDW (i, j) * log (p_dw);
+		}
+	}
+	return s;
+}
+			
 #define MAXBUFFER 1000
 void read () {
 	int i, w, n;
 	char c;
 	int pos = 0, end;
 	std::string line;
-	std::stringstream ss;
-	std::getline (std::cin, line);
-	sscanf (line.c_str (), "%d%d", &nd, &nw);
-	init_model ();
 	for (i = 0; i < nd; i++) {
 		std::getline (std::cin, line);
 		pos = 0;
@@ -120,13 +132,23 @@ void output () {
 	}
 	printf ("R:%d\n", R);
 }
+void plsi () {
+	double likelyhood = 0, oldhood = 0;
+	while ((likelyhood = compute_likelyhood ()) - oldhood > epsilon) {
+		step_e ();
+		step_m ();
+		oldhood = likelyhood;
+	}
+}
 int main (int argc, char *argv[]) {
-	if (argc < 2) {
+	if (argc < 4) {
 		printf ("need k.\n");
 		exit (-1);
 	}
-	nz = atoi (argv[1]);
+	nd = atoi (argv[1]);
+	nz = atoi (argv[2]);
+	nw = atoi (argv[3]);
+	init_model ();
 	read ();
-	output ();
 }
 
