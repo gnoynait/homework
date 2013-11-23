@@ -11,7 +11,7 @@ double *w_z;
 int    *ndw;
 int nd, nz, nw;
 int R;
-const double epsilon = 0.005;
+const double epsilon = 0.1;
 #define Z_DW(z, d, w) (z_dw[d * nw * nz + w * nz + z])
 #define Z(n) (z[n])
 #define D_Z(d, z) (d_z[z * nd + d])
@@ -121,6 +121,7 @@ void read () {
 			pos = line.find_first_not_of ("1234567890:", pos);
 		}
 	}
+	printf ("read done\n");
 }
 void output () {
 	int i, j;
@@ -150,5 +151,6 @@ int main (int argc, char *argv[]) {
 	nw = atoi (argv[3]);
 	init_model ();
 	read ();
+	printf ("%f\n", compute_likelyhood ());
 }
 
