@@ -1,156 +1,190 @@
 #include<iostream>
+#include<vector>
 #include<string>
 #include<cstdio>
+#include<cassert>
 #include<cmath>
 #include<cstdlib>
+#include<cstring>
 #include<sstream>
-double *z_dw;
-double *z;
-double *d_z;
-double *w_z;
-int    *ndw;
-int nd, nz, nw;
-int R;
-const double epsilon = 0.1;
-#define Z_DW(z, d, w) (z_dw[d * nw * nz + w * nz + z])
-#define Z(n) (z[n])
-#define D_Z(d, z) (d_z[z * nd + d])
-#define W_Z(w, z) (w_z[z * nw + w])
-#define NDW(d, w) (ndw[d * nw + w])
+#define DEBUG
+using namespace std;
 
+double *pz; // P(z)
+double *pd_z; // P(d|z)
+double *pw_z;// P(w|z)
+int nd; // number of docs
+int nz; // number of topics
+int nw; // number of words
+vector<vector<pair<int, int> > > docs;
+const double epsilon = 0.001;
+const int max_iter = 1000;
+double inline uniform_rand () {
+	double r = (double) rand () / RAND_MAX;
+	assert (r >= 0 && r <= 1);
+	return r;
+}
 void init_model () {
-	z_dw = new double[nd * nw * nz];
-	z = new double[nz];
-	d_z = new double[nz * nd];
-	w_z = new double[nz * nw];
-	ndw = new int[nd * nw];
-}
-
-void step_e () {
-	int i, j, k;
-	double den;
-	for (i = 0; i < nd; i++) {
-		for (j = 0; j < nw; j++) {
-			den = 0.0;
-			for (k = 0; k < nz; k++) {
-				den += Z(k) * D_Z(i, k) * W_Z(j, k);
-			}
-			for (k = 0; k < nz; k++) {
-				Z_DW (k, i, j) = Z(k) * D_Z(i, k) * W_Z(j, k) / den;
-			}
+	pz = new double[nz];
+	pd_z = new double[nz * nd];
+	pw_z = new double[nz * nw];
+	for (int z = 0; z < nz; z++) {
+		pz[z] = uniform_rand ();
+	}
+	for (int d = 0; d < nd; d++) {
+		for (int z = 0; z < nz; z++) {
+			pd_z[d * nz + z] = uniform_rand ();
+		}
+	}
+	for (int w = 0; w < nw; w++) {
+		for (int z = 0; z < nz; z++) {
+			pw_z[w * nz + z] = uniform_rand ();
 		}
 	}
 }
 
-void step_m () {
-	int i, j, k, l;
-	double den, mol;
-	/* update W_Z */
-	for (i = 0; i < nz; i++) {
-		den = 0.0;
-		for (k = 0; k < nw; k++) {
-			for (l = 0; l < nd; l++) {
-				den += NDW(l, k) * Z_DW(i, l, k);
+double compute_likelihood () {
+	double likelihood = 0;
+	for (int d = 0; d < nd; d++) {
+		for (vector<pair<int, int> >::iterator it = docs[d].begin ();
+			it != docs[d].end (); it++) {
+			int w = it->first;
+			int n = it->second;
+			double p = 0;
+			for (int z = 0; z < nz; z++) {
+				p += pz[z] * pw_z[w * nz + z] * pd_z[d * nz + z];
 			}
-		}
-		for (j = 0; j < nw; j++) {
-			mol = 0.0;
-			for (l = 0; l < nd; l++) {
-				mol += NDW(l, j) * Z_DW(i, l, j);
-			}
-			W_Z(j, i) = mol / den;
-		}
-	}	
-
-	/* update D_Z */
-	for (i = 0; i < nz; i++) {
-		den = 0.0;
-		for (j = 0; j < nd; j++) {
-			for (k = 0; k < nw; k++) {
-				den += NDW(j, k) * Z_DW(i, j, k);
-			}
-		}
-		for (j = 0; j < nd; j++) {
-			mol = 0.0;
-			for (k = 0; k < nw; k++) {
-				mol += NDW (j, k) * Z_DW (i, j, k);
-			}
-			D_Z (j, i) = mol / den;
+			likelihood += n * log(p);
 		}
 	}
-
-	/* update Z */
-	for (i = 0; i < nz; i++) {
-		mol = 0.0;
-		for (j = 0; j < nd; j++) {
-			for (k = 0; k < nw; k++) {
-				mol += NDW (j, k) * Z_DW (i, j, k);
-			}
-		}
-		Z(i) = mol / R;
-	}
+	return likelihood;
 }
-double compute_likelyhood () {
-	int i, j, k;
-	double s = 0, p_dw = 0;
-	for (i = 0; i < nd; i++) {
-		for (j = 0; j < nw; j++) {
-			p_dw = 0;
-			for (k = 0; k < nz; k++) {
-				p_dw += W_Z (j, k) * D_Z (i, k) * Z (k);
-			}
-			s += NDW (i, j) * log (p_dw);
-		}
-	}
-	return s;
-}
+
+double update () {
+	double *up_pz = new double[nz];
+	double down_pz = 0;
+	memset (up_pz, 0, sizeof (double) * nz);
+
+	double *up_pd_z = new double[nz * nd];
+	double *down_pd_z = new double[nz];
+	memset (up_pd_z, 0, sizeof (double) * nz * nd);
+	memset (down_pd_z, 0, sizeof (double) * nz);
+
+	double *up_pw_z = new double[nz * nw];
+	double *down_pw_z = new double[nz];
+	memset (up_pw_z, 0, sizeof (double) * nz * nw);
+	memset (down_pw_z, 0, sizeof (double) * nz);
+
+	for (int d = 0; d < nd; d++) {
+		for (vector<pair<int, int> >::iterator it = docs[d].begin ();
+			it != docs[d].end (); it++) {
+			int w = it->first;
+			int n = it->second;
+			double down = 0;
+			double *up = new double[nz];
 			
-#define MAXBUFFER 1000
-void read () {
-	int i, w, n;
-	char c;
-	int pos = 0, end;
-	std::string line;
-	for (i = 0; i < nd; i++) {
-		std::getline (std::cin, line);
-		pos = 0;
-		while ((pos = line.find_first_of ("1234567890", pos)) != std::string::npos) {
-			sscanf (line.c_str() + pos, "%d:%d", &w, &n);
-			NDW (i, w) += n;
-			R += n;
-			pos = line.find_first_not_of ("1234567890:", pos);
+			for (int z = 0; z < nz; z++) {
+				up[z] = pz[z] * pw_z[w * nz + z] * pd_z[d * nz + z];
+				assert (up[z] >= 0);
+				down += up[z];
+			}
+			assert (down >= 0);
+			for (int z = 0; z < nz; z++) {
+				double pz_dw = up[z] / down;
+
+				up_pd_z[d * nz + z] = n * pz_dw;
+				down_pd_z[z] += n * pz_dw;
+
+				up_pw_z[w * nz + z] = n * pz_dw;
+				down_pw_z[z] += n * pz_dw;
+				
+				up_pz[z] = n * pz_dw;
+			}
+			down_pz += n;
+			delete[] up;
 		}
 	}
-	printf ("read done\n");
+
+	for (int d = 0; d < nd; d++) {
+		for (int z = 0; z < nz; z++) {
+			pd_z[d * nz + z] = up_pd_z[d * nz + z] / down_pd_z[z];
+			if (isnan(pd_z[d * nz + z]))
+				printf ("%f:::%f\n", up_pd_z[d * nz + z], down_pd_z[z]);
+			assert (pd_z[d * nz + z] >= 0);
+			assert (pd_z[d * nz + z] <= 1);
+		}
+	}
+	for (int w = 0; w < nw; w++) {
+		for (int z = 0; z < nz; z++) {
+			pw_z[w * nz + z] = up_pw_z[w * nz + z] / down_pw_z[z];
+			assert (pw_z[w * nz + z] >= 0);
+			assert (pw_z[w * nz + z] <= 1);
+		}
+	}
+	for (int z = 0; z < nz; z++) {
+		pz[z] = up_pz[z] / down_pz;
+		assert (pz[z] >= 0);
+		assert (pz[z] <= 1);
+	}
+	delete[] up_pz;
+	delete[] up_pw_z;
+	delete[] down_pw_z;
+	delete[] up_pd_z;
+	delete[] down_pd_z;
+	return compute_likelihood ();
+}
+
+void read () {
+	char sep;
+	int w, n;
+	int max_w = 0; // current maximum word id
+	vector<pair<int, int> > doc;
+	while (scanf ("%d:%d%c", &w, &n, &sep) == 3) {
+		doc.push_back (make_pair (w, n));
+		max_w = w > max_w ? w : max_w;
+		if (sep == '\n') {
+			docs.push_back (doc);
+			doc.clear ();
+		}
+	}
+	nd = docs.size ();
+	nw = max_w + 1;
+#ifdef DEBUG
+	printf ("nd:%d, nw:%d\n", nd, nw);
+#endif
 }
 void output () {
-	int i, j;
-	for (i = 0; i < nd; i++) {
-		for (j = 0; j < nw; j++) {
-			printf ("%d ", NDW (i, j));
+	FILE *fw_z = fopen ("w_z.txt", "w");
+	for (int z = 0; z < nz; z++) {
+		for (int w = 0; w < nw; w++) {
+			if (w > 0)
+				fprintf (fw_z, " ");
+			fprintf (fw_z, "%f", pw_z[w * nz + z]);
 		}
-		printf ("\n");
+		fprintf (fw_z, "\n");
 	}
-	printf ("R:%d\n", R);
+	fclose (fw_z);
 }
 void plsi () {
-	double likelyhood = 0, oldhood = 0;
-	while ((likelyhood = compute_likelyhood ()) - oldhood > epsilon) {
-		step_e ();
-		step_m ();
-		oldhood = likelyhood;
+	double likelihood = 0, oldhood = 0;
+	int iter = 0;
+	while (/*fabs((likelihood = update ()) - oldhood) > epsilon && */iter++ < max_iter) {
+		oldhood = likelihood;
+		oldhood = update ();
+#ifdef DEBUG
+		printf ("%f\n", oldhood);
+#endif
 	}
 }
 int main (int argc, char *argv[]) {
-	if (argc < 4) {
+	if (argc < 2) {
 		printf ("need k.\n");
 		exit (-1);
 	}
-	nd = atoi (argv[1]);
-	nz = atoi (argv[2]);
-	nw = atoi (argv[3]);
-	init_model ();
+	nz = atoi (argv[1]);
 	read ();
-	printf ("%f\n", compute_likelyhood ());
+	init_model ();
+	plsi ();
+	output ();
 }
 
