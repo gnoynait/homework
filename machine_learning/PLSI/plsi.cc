@@ -108,8 +108,6 @@ void update () {
 	for (int d = 0; d < nd; d++) {
 		for (int z = 0; z < nz; z++) {
 			pd_z[d * nz + z] = up_pd_z[d * nz + z] / down_pd_z[z];
-			if (isnan(pd_z[d * nz + z]))
-				printf ("%f:::%f\n", up_pd_z[d * nz + z], down_pd_z[z]);
 			assert (pd_z[d * nz + z] >= 0);
 			assert (pd_z[d * nz + z] <= 1);
 		}
@@ -138,7 +136,13 @@ void read () {
 	int w, n;
 	int max_w = 0; // current maximum word id
 	vector<pair<int, int> > doc;
-	while (scanf ("%d:%d%c", &w, &n, &sep) == 3) {
+	FILE *datafile = fopen ("datafile.txt", "r");
+	if (datafile == NULL) {
+		printf ("can't open datafile.txt\n");
+		exit (-2);
+	}
+	
+	while (fscanf (datafile, "%d:%d%c", &w, &n, &sep) == 3) {
 		doc.push_back (make_pair (w, n));
 		max_w = w > max_w ? w : max_w;
 		if (sep == '\n') {
@@ -146,12 +150,11 @@ void read () {
 			doc.clear ();
 		}
 	}
+	fclose (datafile);
 	nd = docs.size ();
 	nw = max_w + 1;
-#ifdef DEBUG
-	printf ("nd:%d, nw:%d\n", nd, nw);
-#endif
 }
+
 void output () {
 	FILE *fw_z = fopen ("w_z.txt", "w");
 	for (int z = 0; z < nz; z++) {
@@ -163,7 +166,26 @@ void output () {
 		fprintf (fw_z, "\n");
 	}
 	fclose (fw_z);
+	FILE *fd_z = fopen ("d_z.txt", "w");
+	for (int z = 0; z < nz; z++) {
+		for (int d = 0; d < nd; d++) {
+			if (d > 0)
+				fprintf (fd_z, " ");
+			fprintf (fd_z, "%f", pd_z[d * nz + z]);
+		}
+		fprintf (fd_z, "\n");
+	}
+	fclose (fd_z);
+	FILE *fz = fopen ("z.txt", "w");
+	for (int z = 0; z < nz; z++) {
+		if (z > 0)
+			fprintf (fz, " ");
+		fprintf (fz, "%f", pz[z]);
+	}
+	fprintf (fz, "\n");
+	fclose (fz);
 }
+
 void plsi () {
 	double likelihood = 0, oldhood = 0;
 	for (int iter = 1; iter <= max_iter; iter++) {
@@ -171,19 +193,16 @@ void plsi () {
 		if (iter % 100 == 0) {
 			oldhood = likelihood;
 			likelihood = compute_likelihood ();
-			
+			printf ("%f\n", likelihood);
 			if (fabs(likelihood - oldhood) / 100 < epsilon)
 				break;
-//#ifdef DEBUG
-			printf ("iter %d:%f\n", iter, likelihood);
-//#endif
-
 		}
 	}
 }
+
 int main (int argc, char *argv[]) {
 	if (argc < 2) {
-		printf ("need k.\n");
+		printf ("need z.\n");
 		exit (-1);
 	}
 	nz = atoi (argv[1]);

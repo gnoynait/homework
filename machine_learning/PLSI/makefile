@@ -1,3 +1,3 @@
 plsi: plsi.cc
-	g++ -g -o plsi plsi.cc
+	g++ -O2 -o plsi plsi.cc
 

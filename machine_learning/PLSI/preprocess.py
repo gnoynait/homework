@@ -30,10 +30,11 @@ def preprosess (inputfile, datafile, vacfile):
         print >>vacfile, k, v
 
 if __name__ == "__main__":
-    datafile = open(sys.argv[1], "w")
-    vocfile = open (sys.argv[2], "w")
+    data = open ("data.txt")
+    datafile = open("datafile.txt", "w")
+    vocfile = open ("vocafile.txt", "w")
     stopwordsfile = open ("stopwords.txt")
     for w in stopwordsfile:
         stopwords.add (w.strip ())
-    preprosess (sys.stdin, datafile, vocfile)
+    preprosess (data, datafile, vocfile)
     print >>sys.stderr, len (vocabulary),  doc
