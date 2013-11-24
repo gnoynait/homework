@@ -17,10 +17,10 @@ int nd; // number of docs
 int nz; // number of topics
 int nw; // number of words
 vector<vector<pair<int, int> > > docs;
-const double epsilon = 0.001;
-const int max_iter = 5000;
+const double epsilon = 0.01;
+const int max_iter = 3000;
 double inline uniform_rand () {
-	double r = (double) rand () / RAND_MAX;
+	double r = 1.0 * rand () / RAND_MAX;
 	assert (r >= 0 && r <= 1);
 	return r;
 }
@@ -171,13 +171,14 @@ void plsi () {
 		if (iter % 100 == 0) {
 			oldhood = likelihood;
 			likelihood = compute_likelihood ();
+			
+			if (fabs(likelihood - oldhood) / 100 < epsilon)
+				break;
 //#ifdef DEBUG
-			printf ("%f\n", likelihood);
+			printf ("iter %d:%f\n", iter, likelihood);
 //#endif
 
 		}
-//		if (fabs(likelihood - oldhood) < 0.001)
-//			break;
 	}
 }
 int main (int argc, char *argv[]) {
