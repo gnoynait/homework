@@ -2,12 +2,18 @@ from stemmer import PorterStemmer
 import sys
 stemmer = PorterStemmer ()
 vocabulary = dict ()
+stopwords = set ()
 doc = 0
 def prosses_line (line):
     line = line.lower ()
+    line = line.replace ('-', ' ')
     words = line.split ()
     data = []
     for w in words:
+        if w in stopwords:
+            continue
+        if w.strip ('0123456789') == '':
+            continue
         w = stemmer.stem (w, 0, len(w) - 1)
         if w not in vocabulary:
             vocabulary[w] = len(vocabulary)
@@ -26,5 +32,8 @@ def preprosess (inputfile, datafile, vacfile):
 if __name__ == "__main__":
     datafile = open(sys.argv[1], "w")
     vocfile = open (sys.argv[2], "w")
+    stopwordsfile = open ("stopwords.txt")
+    for w in stopwordsfile:
+        stopwords.add (w.strip ())
     preprosess (sys.stdin, datafile, vocfile)
     print >>sys.stderr, len (vocabulary),  doc

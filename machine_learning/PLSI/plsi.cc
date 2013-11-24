@@ -7,7 +7,7 @@
 #include<cstdlib>
 #include<cstring>
 #include<sstream>
-#define DEBUG
+//#define DEBUG
 using namespace std;
 
 double *pz; // P(z)
@@ -18,7 +18,7 @@ int nz; // number of topics
 int nw; // number of words
 vector<vector<pair<int, int> > > docs;
 const double epsilon = 0.001;
-const int max_iter = 1000;
+const int max_iter = 5000;
 double inline uniform_rand () {
 	double r = (double) rand () / RAND_MAX;
 	assert (r >= 0 && r <= 1);
@@ -60,7 +60,7 @@ double compute_likelihood () {
 	return likelihood;
 }
 
-double update () {
+void update () {
 	double *up_pz = new double[nz];
 	double down_pz = 0;
 	memset (up_pz, 0, sizeof (double) * nz);
@@ -92,13 +92,13 @@ double update () {
 			for (int z = 0; z < nz; z++) {
 				double pz_dw = up[z] / down;
 
-				up_pd_z[d * nz + z] = n * pz_dw;
+				up_pd_z[d * nz + z] += n * pz_dw;
 				down_pd_z[z] += n * pz_dw;
 
-				up_pw_z[w * nz + z] = n * pz_dw;
+				up_pw_z[w * nz + z] += n * pz_dw;
 				down_pw_z[z] += n * pz_dw;
 				
-				up_pz[z] = n * pz_dw;
+				up_pz[z] += n * pz_dw;
 			}
 			down_pz += n;
 			delete[] up;
@@ -131,7 +131,6 @@ double update () {
 	delete[] down_pw_z;
 	delete[] up_pd_z;
 	delete[] down_pd_z;
-	return compute_likelihood ();
 }
 
 void read () {
@@ -167,13 +166,18 @@ void output () {
 }
 void plsi () {
 	double likelihood = 0, oldhood = 0;
-	int iter = 0;
-	while (/*fabs((likelihood = update ()) - oldhood) > epsilon && */iter++ < max_iter) {
-		oldhood = likelihood;
-		oldhood = update ();
-#ifdef DEBUG
-		printf ("%f\n", oldhood);
-#endif
+	for (int iter = 1; iter <= max_iter; iter++) {
+		update ();
+		if (iter % 100 == 0) {
+			oldhood = likelihood;
+			likelihood = compute_likelihood ();
+//#ifdef DEBUG
+			printf ("%f\n", likelihood);
+//#endif
+
+		}
+//		if (fabs(likelihood - oldhood) < 0.001)
+//			break;
 	}
 }
 int main (int argc, char *argv[]) {
