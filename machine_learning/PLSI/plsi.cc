@@ -16,14 +16,18 @@ double *pw_z;// P(w|z)
 int nd; // number of docs
 int nz; // number of topics
 int nw; // number of words
+
 vector<vector<pair<int, int> > > docs;
+
+//if two iteration's loglikelihood less than this, stop
 const double epsilon = 0.01;
 const int max_iter = 3000;
+
 double inline uniform_rand () {
-	double r = 1.0 * rand () / RAND_MAX;
-	assert (r >= 0 && r <= 1);
-	return r;
+	return 1.0 * rand () / RAND_MAX;
 }
+
+/* give random initial value */
 void init_model () {
 	pz = new double[nz];
 	pd_z = new double[nz * nd];
@@ -43,6 +47,7 @@ void init_model () {
 	}
 }
 
+/* compute the likelihood of the dataset */
 double compute_likelihood () {
 	double likelihood = 0;
 	for (int d = 0; d < nd; d++) {
@@ -60,7 +65,9 @@ double compute_likelihood () {
 	return likelihood;
 }
 
+/* EM algorithm */
 void update () {
+	// up means numerator and down denominator
 	double *up_pz = new double[nz];
 	double down_pz = 0;
 	memset (up_pz, 0, sizeof (double) * nz);
@@ -75,6 +82,7 @@ void update () {
 	memset (up_pw_z, 0, sizeof (double) * nz * nw);
 	memset (down_pw_z, 0, sizeof (double) * nz);
 
+	// go through document and words, do E step and M step together
 	for (int d = 0; d < nd; d++) {
 		for (vector<pair<int, int> >::iterator it = docs[d].begin ();
 			it != docs[d].end (); it++) {
@@ -104,7 +112,7 @@ void update () {
 			delete[] up;
 		}
 	}
-
+	// update P(d|z)
 	for (int d = 0; d < nd; d++) {
 		for (int z = 0; z < nz; z++) {
 			pd_z[d * nz + z] = up_pd_z[d * nz + z] / down_pd_z[z];
@@ -112,6 +120,7 @@ void update () {
 			assert (pd_z[d * nz + z] <= 1);
 		}
 	}
+	// update P(w|z)
 	for (int w = 0; w < nw; w++) {
 		for (int z = 0; z < nz; z++) {
 			pw_z[w * nz + z] = up_pw_z[w * nz + z] / down_pw_z[z];
@@ -119,6 +128,7 @@ void update () {
 			assert (pw_z[w * nz + z] <= 1);
 		}
 	}
+	// update P(z)
 	for (int z = 0; z < nz; z++) {
 		pz[z] = up_pz[z] / down_pz;
 		assert (pz[z] >= 0);
@@ -131,6 +141,7 @@ void update () {
 	delete[] down_pd_z;
 }
 
+// read date from file and get number of docs and words
 void read () {
 	char sep;
 	int w, n;
@@ -155,6 +166,7 @@ void read () {
 	nw = max_w + 1;
 }
 
+// output P(w|z), P(d|z), P(z) to files
 void output () {
 	FILE *fw_z = fopen ("w_z.txt", "w");
 	for (int z = 0; z < nz; z++) {
@@ -186,15 +198,18 @@ void output () {
 	fclose (fz);
 }
 
+// PLSI algorithm, keep update until expire max_iter or log likelihood 
+// almost don't change
 void plsi () {
 	double likelihood = 0, oldhood = 0;
 	for (int iter = 1; iter <= max_iter; iter++) {
 		update ();
-		if (iter % 100 == 0) {
+		// compute average log likelihood over 10 iteration
+		if (iter % 10 == 0) {
 			oldhood = likelihood;
 			likelihood = compute_likelihood ();
 			printf ("%f\n", likelihood);
-			if (fabs(likelihood - oldhood) / 100 < epsilon)
+			if (fabs(likelihood - oldhood) / 10 < epsilon)
 				break;
 		}
 	}
@@ -205,7 +220,7 @@ int main (int argc, char *argv[]) {
 		printf ("need z.\n");
 		exit (-1);
 	}
-	nz = atoi (argv[1]);
+	nz = atoi (argv[1]); // argv[1] is the number of topics
 	read ();
 	init_model ();
 	plsi ();

@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 vocabulary = dict ()
 toprint = 20
 with open ('vocafile.txt') as vf:
@@ -21,3 +23,4 @@ with open ('w_z.txt') as wzf:
         #representer = [vocabulary[str(i)] for i in ids[:toprint]]
         #print ' '.join (representer)
         topic += 1
+	print
