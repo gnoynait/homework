@@ -1,0 +1,5 @@
+echo $0 $1 $2
+python Random_matrix.py $2 $1
+./rcpu $1 $2 -p -d
+./rmpi $1 $2 -p -d
+./val
