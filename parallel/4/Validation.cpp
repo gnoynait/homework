@@ -20,36 +20,36 @@ int main(int argc, char* argv[]){
 	if(argc>1){
 		P = argv[1];
 	}
-	ifstream matrixUcpu("matrixUcpu");
+	ifstream matrixUcpu("matrixUcpu.mat");
 	if(!(matrixUcpu.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
 	}
 
-	ifstream matrixVcpu("matrixVcpu");
+	ifstream matrixVcpu("matrixVcpu.mat");
 	if(!(matrixVcpu.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
 	}
 
-	ifstream matrixScpu("matrixScpu");
+	ifstream matrixScpu("matrixScpu.mat");
 	if(!(matrixScpu.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
 	}
-	ifstream matrixUomp("matrixUomp");
+	ifstream matrixUomp("matrixUomp.mat");
 	if(!(matrixUomp.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
 	}
 
-	ifstream matrixVomp("matrixVomp");
+	ifstream matrixVomp("matrixVomp.mat");
 	if(!(matrixVomp.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
 	}
 
-	ifstream matrixSomp("matrixSomp");
+	ifstream matrixSomp("matrixSomp.mat");
 	if(!(matrixSomp.is_open())){
 		cout<<"Error: file not found"<<endl;
 		return 0;
@@ -57,7 +57,6 @@ int main(int argc, char* argv[]){
 
 	matrixUcpu>>M;
 	matrixUcpu>>N;
-
 
 	Ucpu = new double *[N];
 	Vcpu = new double *[N];

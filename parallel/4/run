@@ -1,0 +1,4 @@
+python randomMatrix.py $1 $1
+./scpu $1 $1 -d -t 
+./somp $1 $1 -d -t
+./val -P

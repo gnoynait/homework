@@ -286,8 +286,6 @@ int main (int argc, char* argv[]){
     ofstream Af;
     //file for Matrix A
     Af.open("matrixA.mat"); 
-    Af<<"# Created from debug\n# name: A\n# type: matrix\n# rows: "<<M<<"\n# columns: "<<N<<"\n";
-
 
     for(int i = 0; i<M;i++){
       for(int j =0; j<N;j++){
@@ -302,8 +300,7 @@ int main (int argc, char* argv[]){
 
     //File for Matrix U
     Uf.open("matrixUcpu.mat");
-    Uf<<"# Created from debug\n# name: Ucpu\n# type: matrix\n# rows: "<<M<<"\n# columns: "<<N<<"\n";
-    
+    Uf << M << " " << N << endl;
     for(int i = 0; i<M;i++){
       for(int j =0; j<N;j++){
         Uf<<" "<<U[i][j];
@@ -315,7 +312,6 @@ int main (int argc, char* argv[]){
     ofstream Vf;
     //File for Matrix V
     Vf.open("matrixVcpu.mat");
-    Vf<<"# Created from debug\n# name: Vcpu\n# type: matrix\n# rows: "<<M<<"\n# columns: "<<N<<"\n";
 
     for(int i = 0; i<M;i++){
       for(int j =0; j<N;j++){
@@ -330,7 +326,6 @@ int main (int argc, char* argv[]){
     ofstream Sf;
     //File for Matrix S
     Sf.open("matrixScpu.mat");
-    Sf<<"# Created from debug\n# name: Scpu\n# type: matrix\n# rows: "<<M<<"\n# columns: "<<N<<"\n";
 
     
     for(int i = 0; i<M;i++){
