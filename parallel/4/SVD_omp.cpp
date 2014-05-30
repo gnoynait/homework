@@ -147,15 +147,17 @@ int main (int argc, char* argv[]){
 		converge = 0.0;	
 
 		acum++;				//counter of loops
+        int j;
 
 		for(int i = 1; i<M; i++){
-			for(int j = 0; j<i; j++){
+
+#pragma omp parallel for num_threads(4)
+			for(j = 0; j<i; j++){
 
 
 				alpha = 0.0;
 				beta = 0.0;
 				gamma = 0.0;
-#pragma omp parallel for schedule(static) reduction(+:alpha) reduction(+:beta) reduction(+:gamma)
 				for(int k = 0; k<N ; k++){
 					alpha = alpha + (U_t[i][k] * U_t[i][k]);
 					beta = beta + (U_t[j][k] * U_t[j][k]);
@@ -174,7 +176,6 @@ int main (int argc, char* argv[]){
 
 
 				//Apply rotations on U and V
-#pragma omp parallel for private(t) schedule(static)
 				for(int k=0; k<N; k++){
 					t = U_t[i][k];
 					U_t[i][k] = c*t - s*U_t[j][k];

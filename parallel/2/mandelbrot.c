@@ -1,6 +1,9 @@
 
 #include <stdlib.h>
-#include <GL/glut.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/freeglut_std.h>
+#include <GL/freeglut_ext.h>
 
 /* Defaut data via command line */
 /* Can enter other values via command line arguments */
