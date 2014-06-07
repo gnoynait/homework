@@ -151,13 +151,14 @@ int main (int argc, char* argv[]){
 
 		for(int i = 1; i<M; i++){
 
-#pragma omp parallel for num_threads(4)
 			for(j = 0; j<i; j++){
 
 
 				alpha = 0.0;
 				beta = 0.0;
 				gamma = 0.0;
+                
+#pragma omp parallel for reduction(+: alpha) reduction(+: beta) reduction(+:gamma)
 				for(int k = 0; k<N ; k++){
 					alpha = alpha + (U_t[i][k] * U_t[i][k]);
 					beta = beta + (U_t[j][k] * U_t[j][k]);
