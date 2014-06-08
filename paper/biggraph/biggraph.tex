@@ -1,6 +1,9 @@
 \documentclass {report}
 \usepackage{graphicx}
 
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
 \begin{document}
 \title{Big Graph Tools}
 \author{Tian Yong}
@@ -88,6 +91,96 @@ The GraphLab data model consists of two parts: a directed \emph{data graph} and 
 with vertex or edges in a graph while a shared data table(SDT) is an associative map between keys and arbitrary blocks of data to support globally shared state or data.
 \subsection{User Defined Computation}
 There are two kinds of computation in GraphLab: update and sync. Update functions are permitted to access and modify overlapping contexts in the graph and do local computations. Sync is used to global aggregation and it runs concurrently with update functions.
+
+
+A GraphLab update function is a stateless user-defined
+function which operates on the data associated with small
+neighborhoods in the graph and represents the core element
+of computation. Given arbitrary vertex $v$, $S_v$ represents the
+neighborhood of $v$ which consists of $v$, its adjacent edges
+(both inbound and outbound) and its neighboring vertices. And $D_{S_v}$ stands for the data corresponding to the neighborhood $S_v$
+. In addition to $D_{S_v}$, update functions also have read-only access, to the shared
+data table $T$. An update function $f$ to the vertex $v$ is:
+\begin{equation}
+  D_{S_v} \leftarrow f(D_{S_v}, T).
+\end{equation}
+
+A GraphLab program may consist of
+multiple update functions and it is up to the scheduling
+model to determine which update functions
+are applied to which vertices and in which parallel order.
+
+
+The sync mechanism aggregates data across all vertices in
+the graph and its result is associated with a particular entry int the SDT. To invoke a sync mechanism, user
+should provide a key $k$, a \textbf{fold function}(Eq. (\ref{fold_function})), an \textbf{appply function}(Eq. (\ref{apply_function})) as well as an initial value $r^{(0)}_k$ to the SDT.
+\begin{equation}\label{fold_function}
+r^{i+1}_k \leftarrow Fold_k (D_v, r^{i}_k)
+\end{equation}
+\begin{equation}\label{apply_function}
+  T[k] \leftarrow Apply_k(r_k^{(|V|)})
+\end{equation}
+
+When the sync mechanism is invoked, the algorithm in
+Alg.\ref{sync_algo} uses the $Fold_k $
+function to sequentially aggregate
+data across all vertices. The sync mechanism can be set to run periodically in the
+background while the GraphLab engine is actively applying update functions or on demand triggered by update
+functions or user code. If the sync mechanism is executed
+in the background, the resulting aggregated value may not
+be globally consistent. Nonetheless, many ML applications
+are robust to approximate global statistics.
+
+
+\begin{algorithm}
+\caption{Sync algorithm on k}
+\label{sync_algo}
+\begin{algorithmic}[1]
+\Procedure {SYNC}{$k$, $r_k^{(0)}$}
+    \State $t \leftarrow r_k^{(0)}$
+    \ForAll {$v \in V$}
+        \State $t \leftarrow Fold_k(D_v, t)$
+    \EndFor
+    \State $T[k] \leftarrow Apply_k(t)$
+
+\EndProcedure
+
+
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Data Consistency}
+Since scopes may overlap, the simultaneous execution of
+two update functions can lead to race-conditions resulting
+in data inconsistency and even corruption. GraphLab provides
+ a choice of three data consistency models which enable the user
+  to balance performance and data consistency. The 3 models is illustrated in Figure \ref{graphlab_scope}
+   by drawing their exclusion sets as a ring where no two update functions
+    may be executed simultaneously if their exclusions sets overlap
+\begin{figure}
+  \centering
+  % Requires \usepackage{graphicx}
+  \includegraphics[width=\textwidth]{graphlab_scope}\\
+  \caption{(a) The scope, $S_v$ of vertex $v$. (b). Three data consistency
+   models.}\label{graphlab_scope}
+\end{figure}
+
+
+
+\subsection{Scheduling}
+The GraphLab update schedule describes the order in
+which update functions are applied to vertices and is represented by a parallel data-structure called the scheduler.
+The scheduler abstractly represents a dynamic list of tasks
+(vertex-function pairs) which are to be executed by the
+GraphLab engine. GraphLab framework provides a collection of base schedules to achieve different goals.
+
+GraphLab also provide 2 termination assessment methods. The first method relies on
+the scheduler which signals termination when there are no
+remaining tasks. The second termination
+method relies on user provided termination functions which
+examine the SDT and signal when the algorithm has converged.
+
+
 \section{PowerGraph}
 \section{Graphchi}
 \end{document}
