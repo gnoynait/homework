@@ -1,4 +1,4 @@
-\documentclass {report}
+\documentclass {article}
 \usepackage{graphicx}
 
 \usepackage{algorithm}
@@ -8,7 +8,6 @@
 \title{Big Graph Tools}
 \author{Tian Yong}
 \maketitle
-\chapter{Introduction}
 \section{Introduction}
 There are several choices to implement an algorithm to process a large graph:
 \begin{itemize}
@@ -184,55 +183,27 @@ examine the SDT and signal when the algorithm has converged.
 \section{PowerGraph}
 \subsection{Challenges of Natural Graphs}
 The sparsity structure of natural graphs presents a unique
-challenge to efficient distributed graph-parallel computation. One of the hallmark properties of natural graphs
-is theirskewedpower-law degree distribution[16]: most
-vertices have relatively few neighbors while a few have
-many neighbors (e.g., celebrities in a social network). Under a power-law degree distribution the probability that a
-vertex has degreedis given by:
-$$P(d) \propto d^{-\alpha}$$
-where the exponent¦Áis a positive constant that controls
-the ¡°skewness¡± of the degree distribution. Higher¦Áimplies that the graph has lower density (ratio of edges to
-vertices), and that the vast majority of vertices are low
-degree. As¦Ádecreases, the graph density and number
-of high degree vertices increases. Most natural graphs
-typically have a power-law constant around ¦Á¡Ö2. For
-example, Faloutsos et al. [16] estimated that the interdomain graph of the Internet has a power-law constant
-¦Á¡Ö2.2. One can visualize the skewed power-law degree distribution by plotting the number of vertices with a
-given degree in log-log scale. In Fig. 1, we plot the in and
-out degree distributions of the Twitter follower network
-demonstrating the characteristic linear power-law form.
-While power-law degree distributions are empirically
-observable, they do not fully characterize the properties of
-natural graphs. While there has been substantial work (see
-[27]) in more sophisticated natural graph models, the techniques in this paper focus only on the degree distribution
-and do not require any other modeling assumptions.
+challenge to efficient distributed graph-parallel computation. 
+One of the hallmark properties of natural graphs is their skewed 
+power-law degree distribution: most vertices have relatively few 
+neighbors while a few have many neighbors. Under a power-law degree 
+distribution the probability that a vertex has degree $d$ is given 
+by:
+\begin{equation}\label{prob_degree}
+  P(d) \propto d^{-\alpha}
+\end{equation}
+where the exponent $\alpha$ is a positive constant that controls
+the ``skewness'' of the degree distribution.
+
+
 The skewed degree distribution implies that a small
 fraction of the vertices are adjacent to a large fraction
 of the edges. For example, one percent of the vertices
 in the Twitter web-graph are adjacent to nearly half of
-the edges. This concentration of edges results in a starlikemotif which presents challenges for existing graphparallel abstractions:
-Work Balance:The power-law degree distribution can
-lead to substantial work imbalance in graph parallel abstractions that treat vertices symmetrically. Since the storage, communication, and computation complexity of the
-Gather and Scatter phases is linear in the degree, the running time of vertex-programs can vary widely [36].
-Partitioning: Natural graphs are difficult to
-partition[26, 28]. Both GraphLab and Pregel depend on graph partitioning to minimize communication
-and ensure work balance. However, in the case of natural
-graphs both are forced to resort to hash-based (random)
-partitioning which has extremely poor locality (Sec. 5).
-Communication:The skewed degree distribution of
-natural-graphs leads to communication asymmetry and
-consequently bottlenecks. In addition, high-degree vertices can force messaging abstractions, such as Pregel, to
-generate and send many identical messages.
-Storage:Since graph parallel abstractions must locally
-store the adjacency information for each vertex, each
-vertex requires memory linear in its degree. Consequently,
-high-degree vertices can exceed the memory capacity of
-a single machine.
-Computation:While multiple vertex-programs may
-execute in parallel, existing graph-parallel abstractions do
-not parallelizewithinindividual vertex-programs, limiting
-their scalability on high-degree vertices.
-
+the edges. This concentration of edges results in a star-like motif 
+which presents challenges, such as work balance, communication and 
+storage, for existing graph-parallel abstractions, which factor 
+computation over vertices.
 
 
 \begin{algorithm}
@@ -247,9 +218,9 @@ their scalability on high-degree vertices.
 \EndIf
 \State $D_u \leftarrow apply(D_u, a_u)$
 \For neighbor v scatter\_nbrs(u)
-    \State $(D_{(u, v)}, \delta a) \leftarrow scatter(D_u, D_{(u,v)}, D_v)$
-    \If $a_v$ and $\delta a$ are not Empty
-        \State $a_v \leftarrow sum(a_v, \delta a)$
+    \State $(D_{(u, v)}, \Delta a) \leftarrow scatter(D_u, D_{(u,v)}, D_v)$
+    \If $a_v$ and $\Delta a$ are not Empty
+        \State $a_v \leftarrow sum(a_v, \Delta a)$
     \Else
         \State $a_v \leftarrow$ Empty
     \EndIf
@@ -258,165 +229,215 @@ their scalability on high-degree vertices.
 \end{algorithm}
 
 \subsection{GAS Vertex-Programs}
+To address the challenge of computation on power-law graphs, 
+PowerGraph abstraction exploits the structure of vertex-programs
+and explicitly factors computation over edges instead of vertices.
+As a consequence, PowerGraph exposes substantially greater parallelism,
+reduces network communication and storage costs, and provides a new
+highly effective approach to distributed graph placement.
+
+\begin{figure}
+  \centering
+  % Requires \usepackage{graphicx}
+  \includegraphics[width=\textwidth]{GAS.png}\\
+  \caption{All PowerGraph programs must implement the stateless 
+  gather, sum, apply, and scatter functions.}\label{GAS_inter}
+\end{figure}
+
+
 Computation in the PowerGraph abstraction is encoded
-as a state-lessvertex-programwhich implements the
-GASVertexPrograminterface (Fig. 2) and therefore
-explicitly factors into the gather, sum, apply, and scatter functions. Each function is invoked in stages by the
-PowerGraph engine following the semantics in Alg. 1.
-By factoring the vertex-program, the PowerGraph execution engine can distribute a single vertex-program over
+as a state-less vertex-program which implements the
+GASVertexProgram interface (Fig. \ref{GAS_inter}) and therefore
+explicitly factors into the gather, sum, apply, and scatter functions. 
+Each function is invoked in stages by the PowerGraph engine following 
+the semantics in Alg.\ref{vertex_algo}. By factoring the vertex-program,
+the PowerGraph execution engine can distribute a single vertex-program over
 multiple machines and move computation to the data.
-During the gather phase thegatherandsumfunctions are used as amapandreduceto collect information 
-about the neighborhood of the vertex. Thegatherfunction is invoked in parallel on the edges adjacent tou. The
-particular set of edges is determined bygathernbrs
-which can benone, in, out, or all. The gather function is passed the data on the adjacent vertex and edge
-and returns a temporary accumulator (a user defined type).
-The result is combined using the commutative and associativesumoperation. The final resultauof the gather phase
-is passed to the apply phase and cached by PowerGraph.
-After the gather phase has completed, theapplyfunction takes the final accumulator and computes a new vertex valueDuwhich is atomically written back to the graph.
-The size of the accumulatorauand complexity of the apply function play a central role in determining the network
-and storage efficiency of the PowerGraph abstraction and
-should besub-linearand ideally constant in the degree.
-During the scatter phase, thescatterfunction is invoked in parallel on the edges adjacent touproducing
-new edge valuesD(u,v)
-which are written back to the datagraph. As with the gather phase, thescatternbrs
-determines the particular set of edges on which scatter is
-invoked. The scatter function returns an optional value?a
-which is used to dynamically update the cached accumulatoravfor the adjacent vertex (see Sec. 4.2)
+
+
+During the gather phase the gather and sum functions are used as a map and
+reduce to collect information about the neighborhood of the vertex.
+The gather function is invoked in parallel on the edges adjacent to $u$. The
+particular set of edges is determined by $gather\_nbrs$ which can be $none$, 
+$in$, $out$, or $all$. The gather function is passed the data on the adjacent
+vertex and edge and returns a temporary accumulator (a user defined type).
+The result is combined using the commutative and associative sum operation.
+The final result $a_u$ of the gather phase is passed to the $apply$ phase and
+cached by PowerGraph.
+
+
+After the $gather$ phase has completed, the $apply$ function takes the final
+accumulator and computes a new vertex value $D_u$ which is atomically written
+back to the graph. The size of the accumulator $a_u$ and complexity of the 
+apply function play a central role in determining the network and storage 
+efficiency of the PowerGraph abstraction and should be sub-linear and ideally
+constant in the degree.
+
+
+During the $scatter$ phase, the scatter function is invoked in parallel on 
+the edges adjacent to $u$ producing new edge values $D_{(u,v)}$ which are 
+written back to the data graph. As with the gather phase, the $scatter\_nbrs$
+determines the particular set of edges on which scatter is invoked. The scatter
+function returns an optional value $\Delta a$ which is used to dynamically
+update the cached accumulator $a_v$ for the adjacent vertex.
 
 \subsection{Delta Chaching}
-In many cases a vertex-program will be triggered in response to a change in afewof its neighbors. The gather
-operation is then repeatedly invoked onallneighbors,
-many of which remain unchanged, thereby wasting computation cycles. For many algorithms [2] it is possible to
-dynamically maintain the result of the gather phaseau
-and skip the gather on subsequent iterations.
-The PowerGraph engine maintains a cache of the accumulatoraufrom the previous gather phase for each vertex.
-The scatter function canoptionallyreturn an additional?a
-which is atomically added to the cached accumulatorav
-of the neighboring vertexvusing thesumfunction. If?a
-is not returned, then the neighbor¡¯s cachedavis cleared 
-forcing a complete gather on the subsequent execution
-of the vertex-program on the vertexv. When executing
-the vertex-program onvthe PowerGraph engine uses the
-cachedavif available, bypassing the gather phase.
+In many cases a vertex-program will be triggered in response to a change in a
+few of its neighbors. The gather operation is then repeatedly invoked on all 
+neighbors, many of which remain unchanged, thereby wasting computation cycles.
+For many algorithms it is possible to dynamically maintain the result of the 
+gather phase $a_u$ and skip the gather on subsequent iterations. The PowerGraph
+engine maintains a cache of the accumulator $a_u$ from the previous gather phase
+for each vertex. The scatter function can optionally return an additional $\Delta
+a$ which is atomically added to the cached accumulator $a_v$ of the neighboring 
+vertex $v$ using the sum function. If $\Delta a$ is not returned, then the 
+neighbor`s cached $a_v$ is cleared forcing a complete gather on the subsequent
+execution of the vertex-program on the vertex $v$. When executing the vertex-program 
+on $v$ the PowerGraph engine uses the cached $a_v$ if available, bypassing the 
+gather phase.
 
 
 \subsection{Initiating Future Computation}
 The PowerGraph engine maintains a set of active vertices
 on which to eventually execute the vertex-program. The
-user initiates computation by callingActivate(v)or
-Activateall(). The PowerGraph engine then proceeds to execute the vertex-program on the active vertices
-until none remain. Once a vertex-program completes the
-scatter phase it becomes inactive until it is reactivated.
+user initiates computation by calling $Activate(v)$ or
+$Activateall()$. The PowerGraph engine then proceeds to
+execute the vertex-program on the active vertices until
+none remain. Once a vertex-program completes the scatter
+phase it becomes inactive until it is reactivated.
 
-Vertices can activate themselves and neighboring vertices. Each function in a vertex-program can only activate
-vertices visible in the arguments to that function. For example the scatter function invoked on the edge(u,v)can
-only activate the verticesuandv. This restriction is essential to ensure that activation events are generated on
-machines on which they can be efficiently processed.
+Vertices can activate themselves and neighboring vertices.
+Each function in a vertex-program can only activate vertices
+visible in the arguments to that function. 
 
 The order in which activated vertices are executed is up
 to the PowerGraph execution engine. The only guarantee
 is that all activated vertices are eventually executed. This
 flexibility in scheduling enables PowerGraph programs
-to be executed bothsynchronouslyandasynchronously,
+to be executed both synchronously and asynchronously,
 leading to different tradeoffs in algorithm performance,
 system performance, and determinism.
 
 
 \subsection{Distributed Graph Placement}
-The PowerGraph abstraction relies on the distributed datagraph to store the computation state and encode the interaction between vertex-programs. The placement of the
-data-graph structure and data plays a central role in minimizing communication and ensuring work balance.
-A common approach to placing a graph on a cluster
-ofpmachines is to construct a balancedp-wayedge-cut
-(e.g., Fig. 4a) in which vertices are evenly assigned to
-machines and the number of edges spanning machines
-is minimized. Unfortunately, the tools [23, 31] for constructing balanced edge-cuts perform poorly [1,28,26] on
-power-law graphs. When the graph is difficult to partition,
-both GraphLab and Pregel resort to hashed (random) vertex placement. While fast and easy to implement, hashed
-vertex placement cuts most of the edges:
 
-TODO:
-Theorem 5.1.If vertices are randomly assigned to p
-machines then the expected fraction of edges cut is:
-$$
-\textbf{E}[\frac{|Edges Cut|}{|E|} = 1 - \frac{1}{p}.
-$$
+\begin{figure}
+  \centering
+  % Requires \usepackage{graphicx}
+  \includegraphics[width=\textwidth]{cut.png}\\
+  \caption{(a)An edge-cut and(b)vertex-cut of a graph
+  into   three parts. Shaded vertices are ghosts and
+  mirrors respectively.}\label{cut}
+\end{figure}
 
-For a power-law graph with exponent¦Á, the expected
+The placement of the data-graph structure and data plays
+a central role in minimizing communication and ensuring
+work balance. A common approach to placing a graph on a
+cluster of $p$ machines is to construct a balanced $p$-way
+edge-cut (e.g., Fig. \ref{cut}a) in which vertices are evenly
+assigned to machines and the number of edges spanning machines
+is minimized. Unfortunately, the tools for constructing balanced 
+edge-cuts perform poorly on power-law graphs. When the graph
+is difficult to partition, both GraphLab and Pregel resort
+to hashed (random) vertex placement. While fast and easy to
+implement, hashed vertex placement cuts most of the edges. If 
+vertices are randomly assigned to $p$ machines then the expected
+fraction of edges cut is:
+\begin{equation}
+  \textbf{E}[\frac{|Edges Cut|}{|E|} = 1 - \frac{1}{p}.
+\end{equation}
+
+For a power-law graph with exponent $\alpha$, the expected
 number of edges cut per-vertex is:
-$$
-\textbf{E}[\frac{|Edges Cut|}{|V|}]=(1-\frac{1}{p})\textbf{E}[D[v]]=(1-\frac{1}{p})\frac{h_{|V|}(\alpha - 1)}{h_{|V|}}
-$$
-where the $h_{|V|}=\Sigma_{d=1}^{|V|-1}d^{-\alpha}$ is the normalizing constant of the power-law Zipf ditribution.
+\begin{equation}
+  \textbf{E}[\frac{|Edges Cut|}{|V|}]=(1-\frac{1}{p})\textbf{E}
+  [D[v]]=(1-\frac{1}{p})\frac{h_{|V|}(\alpha - 1)}{h_{|V|}}
+\end{equation}
 
-\emph{Proof}. An edge is cut if both vertices are randomly assigned to different machines. The probability that both
-vertices are assigned to different machines is1?1/p.
+where the $h_{|V|}=\Sigma_{d=1}^{|V|-1}d^{-\alpha}$ is the normalizing
+constant of the power-law Zipf ditribution.
 
-Every cut edge contributes to storage and network overhead since both machines maintain a copy of the adjacency information and in some cases [20], aghost(local
-copy) of the vertex and edge data. For example in Fig. 4a
-we construct a three-way edge-cut of a four vertex graph
-resulting in five ghost vertices and all edge data being
-replicated. Any changes to vertex and edge data associated with a cut edge must be synchronized across the
-network. For example, using just two machines, a random cut will cut roughlyhalfthe edges, requiring|E|/2
-communication.
+Every cut edge contributes to storage and network overhead since
+both machines maintain a copy of the adjacency information and 
+in some cases, a local copy of the vertex and edge data. For example
+in Fig. \ref{cut}a we construct a three-way edge-cut of a four vertex
+graph resulting in five ghost vertices and all edge data being
+replicated. Any changes to vertex and edge data associated with
+a cut edge must be synchronized across the network. For example, 
+using just two machines, a random cut will cut roughly half the edges, 
+requiring$|E|/2$ communication.
 
 \subsection{Balanced $p$-way Vertex-Cut}
 By factoring the vertex program along the edges in the
-graph, The PowerGraph abstraction allows a single vertexprogram to span multiple machines. In Fig. 5 a single high
+graph, The PowerGraph abstraction allows a single vertex-program
+to span multiple machines. In Fig. \ref{vertex_cut} a single high
 degree vertex program has been split across two machines
 with the gather and scatter functions running in parallel
 on each machine and accumulator and vertex data being
 exchanged across the network.
-Because the PowerGraph abstraction allows a single
-vertex-program to span multiple machines, we can improve work balance and reduce communication and storage overhead by evenlyassigning edgesto machines and
-allowingvertices to span machines. Each machine only
+
+Because the PowerGraph abstraction allows a single vertex-program 
+to span multiple machines, we can improve work balance and reduce
+communication and storage overhead by evenly assigning edges to 
+machines and allowing vertices to span machines. Each machine only
 stores the edge information for the edges assigned to that
 machine, evenly distributing the massive amounts of edge
 data. Since each edge is stored exactly once, changes to
-edge data do not need to be communicated. However,
-changes to vertex must be copied to all the machines it
-spans, thus the storage and network overhead depend on
-the number of machines spanned by each vertex.
-We minimize storage and network overhead by limiting the number of machines spanned by each vertex.
-A balancedp-wayvertex-cutformalizes this objective
-by assigning eachedge e¡ÊEto a machine A(e)¡Ê
-{1,...,p}. Each vertex then spans the set of machines
-A(v)?{1,...,p}that contain its adjacent edges. We define the balanced vertex-cut objective:
-$$
-\min_A \frac{1}{|V|}\Sigma_{v\in V}|A(v)|
-$$
-$$
-s.t. \max_m |{e \in E | A(e)=m}|, < \lambda \frac{|E|}{p}
-$$
+edge data do not need to be communicated. However, changes to vertex
+must be copied to all the machines it spans, thus the storage and
+network overhead depend on the number of machines spanned by each vertex.
+To minimize storage and network overhead, PowerGraph limit the number 
+of machines spanned by each vertex.
 
-where the imbalance factor¦Ë¡Ý1is a small constant. We
-use the termreplicasof a vertexvto denote the |A(v)|
-copies of the vertexv: each machine inA(v)has a replica
-ofv. Because changes to vertex data are communicated
-to all replicas, the communication overhead is also given
-by|A(v)|. The objective (Eq. 5.3) therefore minimizes the
-average number of replicas in the graph and as a consequence the total storage and communication requirements
-of the PowerGraph engine.
 
-For each vertexvwith multiple replicas, one of the
-replicas israndomlynominated as themasterwhich maintains the master version of the vertex data. All remaining
-replicas ofvare thenmirrorsand maintain a local cached
-read onlycopy of the vertex data. (e.g., Fig. 4b). For instance, in Fig. 4b we construct a three-way vertex-cut of a
-graph yielding only 2 mirrors. Any changes to the vertex
-data (e.g., the Apply function) must be made to the master
-which is then immediately replicated to all mirrors.
+A balanced $p$-way vertex-cut formalizes this objective
+by assigning each edge $e \in E$ to a machine $A(e) \in \{1,\dots,p\}$.
+Each vertex then spans the set of machines $A(v) \subseteq \{1,\dots, p\}$
+that contain its adjacent edges. We define the balanced vertex-cut objective:
+
+\begin{equation}\label{replication_factor}
+  \min_A \frac{1}{|V|}\Sigma_{v\in V}|A(v)|
+\end{equation}
+\begin{equation}\label{balance_cons}
+  s.t. \max_m |{e \in E | A(e)=m}|, < \lambda \frac{|E|}{p}
+\end{equation}
+
+
+where the imbalance factor $\lambda \geq 1$ is a small constant. We
+use the term \textbf{replicas} of a vertex $v$ to denote the $|A(v)|$
+copies of the vertex $v$: each machine in $A(v)$ has a replica of $v$.
+Because changes to vertex data are communicated to all replicas, the
+communication overhead is also given by $|A(v)|$. The objective therefore
+minimizes the average number of replicas in the graph and as a consequence
+the total storage and communication requirements of the PowerGraph engine.
+
+For each vertex $v$ with multiple replicas, one of the
+replicas is randomly nominated as the \textbf{master}
+which maintains the master version of the vertex data.
+All remaining replicas of $v$ are then \textbf{mirrors}
+and maintain a local cached read-only copy of the vertex data.
+For instance, in Fig. \ref{vertex_cut}b we construct a three-way
+vertex-cut of a graph yielding only 2 mirrors. Any changes 
+to the vertex data (e.g., the Apply function) must be made to
+the master which is then immediately replicated to all mirrors.
+
 Vertex-cuts address the major issues associated with
-edge-cuts in power-law graphs. Percolation theory [3]
+edge-cuts in power-law graphs. Percolation theory
 suggests that power-law graphs have good vertex-cuts.
 Intuitively, by cutting a small fraction of the very high
-degree vertices we can quickly shatter a graph. Furthermore, because the balance constraint (Eq. 5.4) ensures
-that edges are uniformly distributed over machines, we
-naturally achieve improved work balance even in the presence of very high-degree vertices.
+degree vertices we can quickly shatter a graph. 
+Furthermore, because the balance constraint (Eq.\ref{balance_cons})
+ensures that edges are uniformly distributed over machines, we
+naturally achieve improved work balance even in the presence of 
+very high-degree vertices.
+
 The simplest method to construct a vertex cut is to
 randomly assign edges to machines. Random (hashed)
-edge placement is fully data-parallel, achieves nearly perfect balance on large graphs, and can be applied in the
+edge placement is fully data-parallel, achieves nearly perfect 
+balance on large graphs, and can be applied in the
 streaming setting. In the following theorem, we relate the
-expected normalized replication factor (Eq. 5.3) to the
-number of machines and the power-law constant¦Á.
+expected normalized replication factor (Eq. \ref{replication_factor})
+to the number of machines and the power-law constant $\alpha$.
 
 Theorem 5.2(Randomized Vertex Cuts). A random
 vertex-cut on p machines has an expected replication:
@@ -589,7 +610,7 @@ end-points in the same interval are flagged ascritical, and
 are updated in sequential order. Non-critical vertices do
 not share edges with other vertices in the interval, and
 can be updated safely in parallel. Note, that the update of
-a critical vertex will observe changes in edges done by 
+a critical vertex will observe changes in edges done by
 preceding updates, adhering to theasynchronousmodel of
 computation. This solution, of course, limits the amount of
 effective parallelism. For some algorithms, consistency is
@@ -602,7 +623,7 @@ this efficiently: The edges are loaded from disk in large
 blocks, which are cached in memory. When the subgraph
 for an interval is created, the edges are referenced as pointers to the cached blocks; modifications to the edge values
 directly modify the data blocks themselves. After finishing the updates for the execution interval, PSW writes the
-modified blocks back to disk, replacing the old data. The 
+modified blocks back to disk, replacing the old data. The
 memory-shard is completely rewritten, while only the activesliding windowof each sliding shard is rewritten to
 disk (see Algorithm 2). When PSW moves to the next interval, it reads the new values from disk, thus implementing
 the asynchronous model. The number of non-sequential
