@@ -1,0 +1,18 @@
+
+
+Some graph algorithms need to change the graph's topology.
+A clustering algorithm, for example, might replace each
+cluster with a single vertex, and a minimum spanning tree
+algorithm might remove all but the tree edges.
+User defined function can not only send messages, but also can
+issue requests to add or remove vertices or edges.
+
+
+Multiple vertices may issue conflicting requests in the same
+superstep. To solve this problem, Pregel use two mechanisms to achieve
+determinism:
+\begin{itemize}
+  \item Partial ordering. As with messages, mutations become elective in the superstep after the requests were
+  issued. Within that superstep removals are performed first, with edge removal before vertex removal. Then additions follow, with vertex addition before edge addition. This partial ordering yields deterministic results for most conflicts.
+  \item Handlers. The remaining conflicts are resolved by user-defined handlers. For these conflicts, system have a default random resolution. But users with special needs may specify a better conflict resolution policy by defining an appropriate handler method.
+\end{itemize}

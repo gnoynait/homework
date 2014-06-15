@@ -1,6 +1,7 @@
-\documentclass {article}
+\documentclass{article}
 \usepackage{graphicx}
-
+\usepackage{natbib}
+\bibliographystyle{unsrt}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 
@@ -9,6 +10,11 @@
 \author{Tian Yong}
 \maketitle
 \section{Introduction}
+Many practical computing problems concern large graphs.
+Standard examples include the Web graph and various social networks.
+The scale of these graphs (in some cases billions of vertices,
+trillions of edges) poses challenges to their efficient processing.
+
 There are several choices to implement an algorithm to process a large graph:
 \begin{itemize}
   \item Crafting a custom distributed infrastructure. This choice leaves machine learning experts repeatedly design a system and implement it.
@@ -16,7 +22,22 @@ There are several choices to implement an algorithm to process a large graph:
   \item Using a single-computer graph algorithm library limiting the scale of problems that can addressed.
   \item Using an parallel graph system, fault tolerance or not.
 \end{itemize}
+
+This paper will introduce four representative big graph processing tools, which are
+Pregel\cite{malewicz2010pregel}, GraphLab\cite{low2010graphlab}, PowerGraph\cite{gonzalez2012powergraph}
+and GraphChi~\cite{kyrola2012graphchi}. Before going into the details, it's better
+to introduce the common \textbf{data graph model}.
+The data graph $G = (V, E)$ encodes both the problem specific sparse computational
+structure and directly modifiable program state.
+The user can associate arbitrary blocks of data (or parameters) with each
+vertex and directed edge in $G$. We denote the data associated with vertex $v$ by $D_v$ ,
+and the data associated with edge $(u,v)$ by $D_{(u,v)}$.
+Although the methodology of each tool differs from each other, they do share
+the same data model with slight difference.
+
 \section{Pregel}
+Pregel is a bulk synchronous message passing abstraction in
+which all vertex-programs run simultaneously in a sequence of super-steps.
 The input to a Pregel computation is a directed graph in
 which each vertex is uniquely identified by a string vertex
 identifier. Each vertex is associated with a modifiable, user
@@ -24,21 +45,26 @@ defined value. The directed edges are associated with their
 source vertices, and each edge consists of a modifiable, user
 defined value and a target vertex identifier.
 
-
-Pregel computations consist of a sequence of iterations, called \emph{supersteps}. During a superstep the framework invokes a userdefined function for each vertex, conceptually in parallel.
+\subsection{Computation Model}
+Pregel computations consist of a sequence of iterations, called \emph{supersteps}. During a superstep the framework invokes a user-defined function for each vertex, conceptually in parallel.
 The function specifies behavior at a single vertex $V$ and a
 single superstep $S$. It can read messages sent to $V$ in superstep $S-1$, send messages to other vertices that will be received at superstep $S + 1$, and modify the state of $V$ and
-its outgoing edges. Messages are typically sent along outgoing edges, but a message may be sent to any vertex whose
-identifier is known.  All communication is from superstep $S$ to superstep $S + 1$. In supersteps, vertex can even change the topology of the graph.
+its outgoing edges. Messages are typically sent along outgoing edges,
+ but a message may be sent to any vertex whose
+identifier is known.  All communication is from superstep $S$ to
+superstep $S + 1$. In supersteps, vertex can even change the topology of the graph.
 
 Algorithm termination is based on every vertex voting to
 halt. In superstep 0, every vertex is in the active state; all
 active vertices participate in the computation of any given
 superstep. A vertex deactivates itself by voting to halt. This
-means that the vertex has no further work to do unless triggered externally, and the Pregel framework will not execute
-that vertex in subsequent supersteps unless it receives a message. If reactivated by a message, a vertex must explicitly deactivate itself again. The algorithm as a whole terminates
-when all vertices are simultaneously inactive and there are
-no messages in transit. This state transition model is illustrated in figure \ref{SMachine}.
+means that the vertex has no further work to do unless triggered externally,
+and the Pregel framework will not execute
+that vertex in subsequent supersteps unless it receives a message.
+If reactivated by a message, a vertex must explicitly deactivate itself again.
+The algorithm as a whole terminates when all vertices are simultaneously
+inactive and there are no messages in transit. This state transition
+model is illustrated in figure \ref{SMachine}.
 
 
 \begin{figure}
@@ -53,41 +79,60 @@ given a strongly connected graph where each vertex contains
 a value, it propagates the largest value to every vertex. In
 each superstep, any vertex that has learned a larger value
 from its messages sends it to all its neighbors. When no
-further vertices change in a superstep, the algorithm terminates
+further vertices change in a superstep, the algorithm terminates.
 \begin{figure}
   \centering
   % Requires \usepackage{graphicx}
   \includegraphics[width=\textwidth]{pregel_max_example.PNG}\\
   \caption{Maximum Value Example. Dotted lines
-are messages. Shaded vertices have voted to halt.}\label{pregel_max}
+  are messages. Shaded vertices have voted to halt.}\label{pregel_max}
 \end{figure}
 
+\subsection{Pregel API}
+Writing a Pregel program involves subclassing the predefined $Vertex$ class.
+Users have to overrides several method to address their need.
+The \textbf{Compute()} will be executed at each active vertex in every superstep.
+Predefined Vertex methods allow Compute() to query information about the current
+vertex and its edges, and to send messages to other vertices. Compute() can inspect the value
+associated with its vertex via \textbf{GetValue()} or modify it via
+\textbf{MutableValue()}. It can inspect and modify the values of
+out-edges using methods supplied by the out-edge iterator.
+These state updates are visible immediately. Since their visibility is confined to
+the modified vertex, there are no data races on concurrent value access from different vertices.
+Pregel introduces commutative associative message
+\textbf{combiners} which are user defined functions that merge
+messages destined to the same vertex.
 
-\subsection{Topology Mutations}
-Some graph algorithms need to change the graph's topology. A clustering algorithm, for example, might replace each
-cluster with a single vertex, and a minimum spanning tree
-algorithm might remove all but the tree edges. User defined function can not only send messages, but also can
-issue requests to add or remove vertices or edges.
+The values associated with the vertex and its edges are the
+only per-vertex state that persists across supersteps.
+Limiting the graph state managed by the framework to a single
+value per vertex or edge simplifies the main computation
+cycle, graph distribution, and failure recovery.
 
-
-Multiple vertices may issue conflicting requests in the same
-superstep. To solve this problem, Pregel use two mechanisms to achieve
-determinism:
-\begin{itemize}
-  \item Partial ordering. As with messages, mutations become elective in the superstep after the requests were
-  issued. Within that superstep removals are performed first, with edge removal before vertex removal. Then additions follow, with vertex addition before edge addition. This partial ordering yields deterministic results for most conflicts.
-  \item Handlers. The remaining conflicts are resolved by user-defined handlers. For these conflicts, system have a default random resolution. Butt users with special needs may specify a better conflict resolution policy by defining an appropriate handler method.
-\end{itemize}
+\subsection{Discussion}
+Pregel is a model suitable for large-scale graph computing with production
+quality, scalable, fault-tolerant implementation.
+The performance, scalability, and fault-tolerance of Pregel
+are already satisfactory for graphs with billions of vertices.
+Assigning vertices to machines to minimize inter-machine
+communication is a challenge. However, partitioning of the input
+graph based on topology may suffice if the topology corresponds to the message traffic, but it may not.
+Pregel is designed for sparse graphs where communication occurs mainly over edges, and we do not expect that
+focus to change. Although care has been taken to support
+high fan-out and fan-in traffic, performance will suffer when
+most vertices continuously send messages to most other vertices.
 
 \section{GraphLab}
-GraphLab is a parallel framework for ML which exploits the sparse structure and common computational patterns of ML algorithms. GraphLab
+GraphLab is an asynchronous distributed shared memory abstraction in which vertex-programs have shared
+access to a distributed graph with data stored on every vertex and edge.
+GraphLab exploits the sparse structure and common computational patterns of ML algorithms. it
 enables ML experts to easily design and implement efficient scalable parallel algorithms by composing problem
-specific computation, data-dependencies, and scheduling. GraphLab is implemented with an efficient shared-memory mechanism for it is both ubiquitous and has
-few effective high-level abstractions.
+specific computation, data-dependencies, and scheduling.
 
 \subsection{Data Model}
 The GraphLab data model consists of two parts: a directed \emph{data graph} and a \emph{shared data table}. The data graph is arbitrary data block associated
 with vertex or edges in a graph while a shared data table(SDT) is an associative map between keys and arbitrary blocks of data to support globally shared state or data.
+
 \subsection{User Defined Computation}
 There are two kinds of computation in GraphLab: update and sync. Update functions are permitted to access and modify overlapping contexts in the graph and do local computations. Sync is used to global aggregation and it runs concurrently with update functions.
 
@@ -97,7 +142,8 @@ function which operates on the data associated with small
 neighborhoods in the graph and represents the core element
 of computation. Given arbitrary vertex $v$, $S_v$ represents the
 neighborhood of $v$ which consists of $v$, its adjacent edges
-(both inbound and outbound) and its neighboring vertices. And $D_{S_v}$ stands for the data corresponding to the neighborhood $S_v$
+(both inbound and outbound) and its neighboring vertices.
+And $D_{S_v}$ stands for the data corresponding to the neighborhood $S_v$
 . In addition to $D_{S_v}$, update functions also have read-only access, to the shared
 data table $T$. An update function $f$ to the vertex $v$ is:
 \begin{equation}
@@ -173,21 +219,30 @@ The scheduler abstractly represents a dynamic list of tasks
 (vertex-function pairs) which are to be executed by the
 GraphLab engine. GraphLab framework provides a collection of base schedules to achieve different goals.
 
-GraphLab also provide 2 termination assessment methods. The first method relies on
+GraphLab also provide two termination assessment methods. The first method relies on
 the scheduler which signals termination when there are no
 remaining tasks. The second termination
 method relies on user provided termination functions which
 examine the SDT and signal when the algorithm has converged.
 
+\subsection{Assessment}
+GraphLab is a parallel abstraction which achieves
+a high level of usability, expressiveness and performance.
+Unlike existing parallel abstractions, GraphLab supports
+the representation of structured data dependencies, iterative
+computation, and flexible scheduling.
+The optimized shared memory implementation gives GraphLab a
+state-of-the-art performance.
 
 \section{PowerGraph}
+
 \subsection{Challenges of Natural Graphs}
 The sparsity structure of natural graphs presents a unique
-challenge to efficient distributed graph-parallel computation. 
-One of the hallmark properties of natural graphs is their skewed 
-power-law degree distribution: most vertices have relatively few 
-neighbors while a few have many neighbors. Under a power-law degree 
-distribution the probability that a vertex has degree $d$ is given 
+challenge to efficient distributed graph-parallel computation.
+One of the hallmark properties of natural graphs is their skewed
+power-law degree distribution: most vertices have relatively few
+neighbors while a few have many neighbors. Under a power-law degree
+distribution the probability that a vertex has degree $d$ is given
 by:
 \begin{equation}\label{prob_degree}
   P(d) \propto d^{-\alpha}
@@ -200,9 +255,9 @@ The skewed degree distribution implies that a small
 fraction of the vertices are adjacent to a large fraction
 of the edges. For example, one percent of the vertices
 in the Twitter web-graph are adjacent to nearly half of
-the edges. This concentration of edges results in a star-like motif 
-which presents challenges, such as work balance, communication and 
-storage, for existing graph-parallel abstractions, which factor 
+the edges. This concentration of edges results in a star-like motif
+which presents challenges, such as work balance, communication and
+storage, for existing graph-parallel abstractions, which factor
 computation over vertices.
 
 
@@ -228,8 +283,8 @@ computation over vertices.
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{GAS Vertex-Programs}
-To address the challenge of computation on power-law graphs, 
+\subsection{GAS Model}
+To address the challenge of computation on power-law graphs,
 PowerGraph abstraction exploits the structure of vertex-programs
 and explicitly factors computation over edges instead of vertices.
 As a consequence, PowerGraph exposes substantially greater parallelism,
@@ -240,7 +295,7 @@ highly effective approach to distributed graph placement.
   \centering
   % Requires \usepackage{graphicx}
   \includegraphics[width=\textwidth]{GAS.png}\\
-  \caption{All PowerGraph programs must implement the stateless 
+  \caption{All PowerGraph programs must implement the stateless
   gather, sum, apply, and scatter functions.}\label{GAS_inter}
 \end{figure}
 
@@ -248,8 +303,8 @@ highly effective approach to distributed graph placement.
 Computation in the PowerGraph abstraction is encoded
 as a state-less vertex-program which implements the
 GASVertexProgram interface (Fig. \ref{GAS_inter}) and therefore
-explicitly factors into the gather, sum, apply, and scatter functions. 
-Each function is invoked in stages by the PowerGraph engine following 
+explicitly factors into the gather, sum, apply, and scatter functions.
+Each function is invoked in stages by the PowerGraph engine following
 the semantics in Alg.\ref{vertex_algo}. By factoring the vertex-program,
 the PowerGraph execution engine can distribute a single vertex-program over
 multiple machines and move computation to the data.
@@ -258,7 +313,7 @@ multiple machines and move computation to the data.
 During the gather phase the gather and sum functions are used as a map and
 reduce to collect information about the neighborhood of the vertex.
 The gather function is invoked in parallel on the edges adjacent to $u$. The
-particular set of edges is determined by $gather\_nbrs$ which can be $none$, 
+particular set of edges is determined by $gather\_nbrs$ which can be $none$,
 $in$, $out$, or $all$. The gather function is passed the data on the adjacent
 vertex and edge and returns a temporary accumulator (a user defined type).
 The result is combined using the commutative and associative sum operation.
@@ -268,14 +323,14 @@ cached by PowerGraph.
 
 After the $gather$ phase has completed, the $apply$ function takes the final
 accumulator and computes a new vertex value $D_u$ which is atomically written
-back to the graph. The size of the accumulator $a_u$ and complexity of the 
-apply function play a central role in determining the network and storage 
+back to the graph. The size of the accumulator $a_u$ and complexity of the
+apply function play a central role in determining the network and storage
 efficiency of the PowerGraph abstraction and should be sub-linear and ideally
 constant in the degree.
 
 
-During the $scatter$ phase, the scatter function is invoked in parallel on 
-the edges adjacent to $u$ producing new edge values $D_{(u,v)}$ which are 
+During the $scatter$ phase, the scatter function is invoked in parallel on
+the edges adjacent to $u$ producing new edge values $D_{(u,v)}$ which are
 written back to the data graph. As with the gather phase, the $scatter\_nbrs$
 determines the particular set of edges on which scatter is invoked. The scatter
 function returns an optional value $\Delta a$ which is used to dynamically
@@ -283,17 +338,17 @@ update the cached accumulator $a_v$ for the adjacent vertex.
 
 \subsection{Delta Chaching}
 In many cases a vertex-program will be triggered in response to a change in a
-few of its neighbors. The gather operation is then repeatedly invoked on all 
+few of its neighbors. The gather operation is then repeatedly invoked on all
 neighbors, many of which remain unchanged, thereby wasting computation cycles.
-For many algorithms it is possible to dynamically maintain the result of the 
+For many algorithms it is possible to dynamically maintain the result of the
 gather phase $a_u$ and skip the gather on subsequent iterations. The PowerGraph
 engine maintains a cache of the accumulator $a_u$ from the previous gather phase
 for each vertex. The scatter function can optionally return an additional $\Delta
-a$ which is atomically added to the cached accumulator $a_v$ of the neighboring 
-vertex $v$ using the sum function. If $\Delta a$ is not returned, then the 
+a$ which is atomically added to the cached accumulator $a_v$ of the neighboring
+vertex $v$ using the sum function. If $\Delta a$ is not returned, then the
 neighbor`s cached $a_v$ is cleared forcing a complete gather on the subsequent
-execution of the vertex-program on the vertex $v$. When executing the vertex-program 
-on $v$ the PowerGraph engine uses the cached $a_v$ if available, bypassing the 
+execution of the vertex-program on the vertex $v$. When executing the vertex-program
+on $v$ the PowerGraph engine uses the cached $a_v$ if available, bypassing the
 gather phase.
 
 
@@ -308,7 +363,7 @@ phase it becomes inactive until it is reactivated.
 
 Vertices can activate themselves and neighboring vertices.
 Each function in a vertex-program can only activate vertices
-visible in the arguments to that function. 
+visible in the arguments to that function.
 
 The order in which activated vertices are executed is up
 to the PowerGraph execution engine. The only guarantee
@@ -336,11 +391,11 @@ work balance. A common approach to placing a graph on a
 cluster of $p$ machines is to construct a balanced $p$-way
 edge-cut (e.g., Fig. \ref{cut}a) in which vertices are evenly
 assigned to machines and the number of edges spanning machines
-is minimized. Unfortunately, the tools for constructing balanced 
+is minimized. Unfortunately, the tools for constructing balanced
 edge-cuts perform poorly on power-law graphs. When the graph
 is difficult to partition, both GraphLab and Pregel resort
 to hashed (random) vertex placement. While fast and easy to
-implement, hashed vertex placement cuts most of the edges. If 
+implement, hashed vertex placement cuts most of the edges. If
 vertices are randomly assigned to $p$ machines then the expected
 fraction of edges cut is:
 \begin{equation}
@@ -358,13 +413,13 @@ where the $h_{|V|}=\sum_{d=1}^{|V|-1}d^{-\alpha}$ is the normalizing
 constant of the power-law Zipf ditribution.
 
 Every cut edge contributes to storage and network overhead since
-both machines maintain a copy of the adjacency information and 
+both machines maintain a copy of the adjacency information and
 in some cases, a local copy of the vertex and edge data. For example
 in Fig. \ref{cut}a we construct a three-way edge-cut of a four vertex
 graph resulting in five ghost vertices and all edge data being
 replicated. Any changes to vertex and edge data associated with
-a cut edge must be synchronized across the network. For example, 
-using just two machines, a random cut will cut roughly half the edges, 
+a cut edge must be synchronized across the network. For example,
+using just two machines, a random cut will cut roughly half the edges,
 requiring$|E|/2$ communication.
 
 \subsection{Balanced $p$-way Vertex-Cut}
@@ -376,9 +431,9 @@ with the gather and scatter functions running in parallel
 on each machine and accumulator and vertex data being
 exchanged across the network.
 
-Because the PowerGraph abstraction allows a single vertex-program 
+Because the PowerGraph abstraction allows a single vertex-program
 to span multiple machines, we can improve work balance and reduce
-communication and storage overhead by evenly assigning edges to 
+communication and storage overhead by evenly assigning edges to
 machines and allowing vertices to span machines. Each machine only
 stores the edge information for the edges assigned to that
 machine, evenly distributing the massive amounts of edge
@@ -386,7 +441,7 @@ data. Since each edge is stored exactly once, changes to
 edge data do not need to be communicated. However, changes to vertex
 must be copied to all the machines it spans, thus the storage and
 network overhead depend on the number of machines spanned by each vertex.
-To minimize storage and network overhead, PowerGraph limit the number 
+To minimize storage and network overhead, PowerGraph limit the number
 of machines spanned by each vertex.
 
 
@@ -403,8 +458,8 @@ that contain its adjacent edges. We define the balanced vertex-cut objective:
 \end{equation}
 
 
-where the imbalance factor $\lambda \geq 1$ is a small constant. We
-use the term \textbf{replicas} of a vertex $v$ to denote the $|A(v)|$
+where the imbalance factor $\lambda \geq 1$ is a small constant.
+The term \textbf{replicas} of a vertex $v$ denotes the $|A(v)|$
 copies of the vertex $v$: each machine in $A(v)$ has a replica of $v$.
 Because changes to vertex data are communicated to all replicas, the
 communication overhead is also given by $|A(v)|$. The objective therefore
@@ -417,7 +472,7 @@ which maintains the master version of the vertex data.
 All remaining replicas of $v$ are then \textbf{mirrors}
 and maintain a local cached read-only copy of the vertex data.
 For instance, in Fig. \ref{vertex_cut}b we construct a three-way
-vertex-cut of a graph yielding only 2 mirrors. Any changes 
+vertex-cut of a graph yielding only 2 mirrors. Any changes
 to the vertex data (e.g., the Apply function) must be made to
 the master which is then immediately replicated to all mirrors.
 
@@ -425,27 +480,26 @@ Vertex-cuts address the major issues associated with
 edge-cuts in power-law graphs. Percolation theory
 suggests that power-law graphs have good vertex-cuts.
 Intuitively, by cutting a small fraction of the very high
-degree vertices we can quickly shatter a graph. 
+degree vertices we can quickly shatter a graph.
 Furthermore, because the balance constraint (Eq.\ref{balance_cons})
 ensures that edges are uniformly distributed over machines, we
-naturally achieve improved work balance even in the presence of 
+naturally achieve improved work balance even in the presence of
 very high-degree vertices.
 
 The simplest method to construct a vertex cut is to
 randomly assign edges to machines. Random (hashed)
-edge placement is fully data-parallel, achieves nearly perfect 
+edge placement is fully data-parallel, achieves nearly perfect
 balance on large graphs, and can be applied in the
 streaming setting. In the following theorem, we relate the
 expected normalized replication factor (Eq. \ref{replication_factor})
 to the number of machines and the power-law constant $\alpha$.
-
-A random vertex-cut on p machines has an expected replication:
+It can be proofed that a random vertex-cut on p machines has an expected replication:
 \begin{equation}
   \textbf{E}[\frac{1}{|V|}\sum_{v\in V}|A(v)|] = \frac{p}{|V|}
   \sum_{v \in V}(1 - (1-\frac{1}{p})^{D[v]}).
 \end{equation}
 
-where $D[v]$ denotes the degree of vertex $v$. For a power law graph the 
+where $D[v]$ denotes the degree of vertex $v$. For a power law graph the
 expected replication is determined entirely by the power-law constant
 $\alpha$:
 \begin{equation}
@@ -457,8 +511,8 @@ $\alpha$:
 where $h_{|V|}=\sum_{d=1}^{|V|-1}d^{- \alpha}$ is the normalizing constant
 of the power-law Zipf distribution.
 
-While lower $\alpha$ values (more high-degree vertices) imply a higher 
-replication factor the effective gains of vertex-cuts relative to edge 
+While lower $\alpha$ values (more high-degree vertices) imply a higher
+replication factor the effective gains of vertex-cuts relative to edge
 cuts actually increase with lower $\alpha$.
 
 
@@ -469,7 +523,7 @@ For a given an edge-cut with $g$ ghosts, any vertex cut along
 the same partition boundary has strictly fewer than $g$ mirrors.
 
 \subsection{Greedy Vertex-Cuts}
-We can improve upon the randomly constructed vertex cut by 
+It can be improved upon the randomly constructed vertex cut by
 de-randomizing the edge-placement process. The
 resulting algorithm is a sequential greedy heuristic which
 places the next edge on the machine that minimizes the
@@ -503,7 +557,7 @@ guaranteed to obtain an expected replication factor that is
 no worse than random placement and in practice can be
 much better. Unlike the randomized algorithm, which is
 embarrassingly parallel and easily distributed, the greedy
-algorithm requires coordination between machines. 
+algorithm requires coordination between machines.
 
 \begin{figure}
   \centering
@@ -518,19 +572,40 @@ algorithm requires coordination between machines.
 
 
 \section{Graphchi}
-\subsection{Parallel Sliding Windows}
+\subsection{Problems in Distributed Graph Systems}
+Many graph systems are able to scale to graphs of
+billions of edges by distributing the computation. However,
+while distributed computional resources are now available
+easily through the Cloud, efficient large-scale computation
+on graphs still remains a challenge. To use existing graph
+frameworks, one is faced with the challenge of partitioning
+the graph across cluster nodes. Finding efficient graph
+cuts that minimize communication between nodes, and are
+also balanced, is a hard problem.
+More generally, distributed systems and their users must deal with managing
+a cluster, fault tolerance, and often unpredictable performance.
+From the perspective of programmers, debugging
+and optimizing distributed algorithms is hard.
 
-Parallel Sliding Windows (PSW)
-method (Algorithm 2). PSW can process a graph with
+GraphChi uses a novel method, Parallel Sliding Window(PSW) to
+address this problem and achieved a amazing result: it naturally implements
+the asynchronous model of computation, which has the the ability to
+do advanced graph computation on just a personal computer, handling graphs
+with billions of edges.
+
+\subsection{Parallel Sliding Windows}
+In many algorithms, the value of a vertex only depends
+on its neighbors¡¯ values. In many case, the computer doesn't
+has enough memory to store all the vertex values. As a consequence,
+the program has to frequently random access the data stored in the disk.
+GraphChi use PSW to solve the random access problem.
+PSW method  can process a graph with
 mutable edge values efficiently from disk, with only a small
 number of non-sequential disk accesses, while supporting
 the asynchronous model of computation. PSW processes
 graphs in three stages: it 1) loads a subgraph from disk; 2)
 updates the vertices and edges; and 3) writes the updated
-values to disk. These stages are explained in detail below,
-with a concrete example. We then present an extension to
-graphs that evolve over time, and analyze the I/O costs of
-the PSW method
+values to disk.
 
 \begin{figure}
   \centering
@@ -542,34 +617,33 @@ stores all edges that have destination vertex in that interval.}\label{vertex_in
 \end{figure}
 
 
-Under the PSW method, the verticesV of graphG=
-(V,E)are split intoPdisjointintervals. For each interval,
-we associate ashard, which stores all the edges that have
+Under the PSW method, the vertices $V$ of graph $G =
+(V,E)$ are split into $P$ disjoint intervals. Each interval
+is associated with a shard, which stores all the edges that have
 destinationin the interval. Edges are stored in the order of
-theirsource(Figure 1). Intervals are chosen to balance the
-number of edges in each shard; the number of intervals,P,
+their source(Figure \ref{vertex_int}). Intervals are chosen to balance the
+number of edges in each shard; the number of intervals,$P$,
 is chosen so that any one shard can be loaded completely
-into memory. Similar data layout for sparse graphs was
-used previously, for example, to implement I/O efficient
-Pagerank and SpMV [5, 21].
+into memory.
+
 PSW does graph computation inexecution intervals,
 by processing vertices one interval at a time. To create the
-subgraph for the vertices in intervalp, their edges (with
+subgraph for the vertices in interval $p$, their edges (with
 their associated values) must be loaded from disk. First,
 Shard(p), which contains the in-edges for the vertices
 in interval(p), is loaded fully into memory. We call thus
-shard(p) thememory-shard. Second, because the edges
-are ordered by their source, theout-edgesfor the vertices
-are stored in consecutive chunks in the other shards, requiring additionalP?1block reads. Importantly, edges for
+shard(p) the memory-shard. Second, because the edges
+are ordered by their source, the out-edges for the vertices
+are stored in consecutive chunks in the other shards, requiring
+additional $P - 1$ block reads. Importantly, edges for
 interval(p+1) are stored immediately after the edges for
 interval(p). Intuitively, when PSW moves from an interval
-to the next, itslidesawindowover each of the shards. We
-call the other shards thesliding shards. Note, that if the
+to the next, it slides a window over each of the shards.
+The other shards are called the sliding shards. Note, that if the
 degree distribution of a graph is not uniform, the window
-length is variable. In total, PSW requires onlyPsequential
+length is variable. In total, PSW requires only $P$ sequential
 disk reads to process each interval. A high-level illustration
-of the process is given in Figure 2, and the pseudo-code of
-the subgraph loading is provided in Algorithm 3.
+of the process is given in Figure \ref{PSW}.
 
 \begin{figure}
   \centering
@@ -583,40 +657,90 @@ are read from each of thesliding shards. The currentsliding windowis pictured on
 
 
 
-After the subgraph for intervalphas been fully loaded from
-disk, PSW executes the user-definedupdate-functionfor
-each vertexin parallel. As update-functions can modify the
+After the subgraph for interval p has been fully loaded from
+disk, PSW executes the user-defined update-function for
+each vertex in parallel. As update-functions can modify the
 edge values, to prevent adjacent vertices from accessing
-edges concurrently (race conditions), we enforceexternal
+edges concurrently (race conditions), we enforce external
 determinism, which guarantees that each execution of PSW
-produces exactly the same result. This guarantee is straightforward to implement: vertices that have edges with both
-end-points in the same interval are flagged ascritical, and
+produces exactly the same result. This guarantee is
+straightforward to implement: vertices that have edges with both
+end-points in the same interval are flagged as critical, and
 are updated in sequential order. Non-critical vertices do
 not share edges with other vertices in the interval, and
 can be updated safely in parallel. Note, that the update of
 a critical vertex will observe changes in edges done by
-preceding updates, adhering to theasynchronousmodel of
+preceding updates, adhering to the asynchronous model of
 computation. This solution, of course, limits the amount of
 effective parallelism. For some algorithms, consistency is
-not critical (for example, see [29]), and we allow the user
-to enable fully parallel updates.
+not critical, and we allow the user to enable fully parallel updates.
 
 Finally, the updated edge values need to be written to disk
 and be visible to the next execution interval. PSW can do
 this efficiently: The edges are loaded from disk in large
 blocks, which are cached in memory. When the subgraph
-for an interval is created, the edges are referenced as pointers to the cached blocks; modifications to the edge values
-directly modify the data blocks themselves. After finishing the updates for the execution interval, PSW writes the
+for an interval is created, the edges are referenced as
+pointers to the cached blocks; modifications to the edge values
+directly modify the data blocks themselves. After finishing
+the updates for the execution interval, PSW writes the
 modified blocks back to disk, replacing the old data. The
-memory-shard is completely rewritten, while only the activesliding windowof each sliding shard is rewritten to
-disk (see Algorithm 2). When PSW moves to the next interval, it reads the new values from disk, thus implementing
-the asynchronous model. The number of non-sequential
-disk writes for a execution interval isP, exactly same as the
-number of reads. Note, if an algorithm only updates edges
-in one direction, PSW only writes the modified blocks to
-disk.
+memory-shard is completely rewritten, while only the active
+sliding window of each sliding shard is rewritten to
+disk. When PSW moves to the next interval, it reads the new
+values from disk, thus implementing the asynchronous model.
+The number of non-sequential disk writes for a execution interval
+is $P$, exactly same as the number of reads. Note, if an
+algorithm only updates edges in one direction, PSW only writes
+the modified blocks to disk.
 
+\subsection{Assessment}
+Parallel Sliding Windows for the external
+memory setting, exploits properties of sparse graphs
+for efficient processing from disk. It requires only a small number of
+sequential disk block transfers, allowing it to perform well
+on both SSDs and traditional hard disks. With PSW method, GraphChi can
+efficiently solve problems that were previously
+only accessible to large-scale cluster computing. In addition, GraphChi relatively (per-node basis)
+outperforms other existing systems, making it an attractive
+choice for parallelizing multiple computations on a cluster.
 
+\section{Conclusion}
+Large-scale graph-structured computation is central to
+tasks ranging from targeted advertising to natural language processing and has led to the development of
+several graph-parallel abstractions including Pregel, GraphLab, PowerGraph and GraphChi.
 
+Pregel is good at graph parallel abstraction, is easy to
+reason with, and ensures deterministic computation. However it leaves
+the user to architect the movement of data. Further Pregel also suffers from the curse of the slow jobs,
+meaning that even a single slow job can slow down the whole
+computation.
+
+GraphLab was built with an asynchronous graph processing paradigm, which is not
+affected by the curse of the slow job. It also allows dynamic iterative computations.
+User-defined update functions live on each vertex and transform data in the scope of
+the vertex. It can choose to trigger neighbor updates and can run without
+global synchronization. Importantly, while Pregel lives with sequential
+dependencies on the graphs, GraphLab allows parallelism, which is important in certain ML algorithms.
+
+The need to reason about large-scale graph-structured data
+has driven the development of new graph-parallel abstractions such as GraphLab and Pregel.
+However graphs derived from real-world phenomena often exhibit power-law
+degree distributions, which are difficult to partition and
+can lead to work imbalance and substantially increased
+communication and storage. To address these challenges, PowerGraph abstraction
+exploits the Gather-Apply-Scatter model of computation to factor vertex-programs
+over edges, splitting high-degree vertices and exposing
+greater parallelism in natural graphs. Vertex-cuts substantially reduce the storage
+and communication costs of large distributed power-law graphs.
+
+GraphChi draw our attention from distributed solutions for graph computation with trillion edges.
+With Parallel Sliding Window method, which exploits locality and properties of sparse graphs
+for efficient processing from disk, GraphChi can do advanced graph computing on a personal
+computer and achieve a competitive performance compared with distributed solutions
+on a large cluster.
+  
+
+\bibliographystyle{unsrt}
+\bibliography{ref}
 
 \end{document}
