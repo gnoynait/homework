@@ -354,7 +354,7 @@ number of edges cut per-vertex is:
   [D[v]]=(1-\frac{1}{p})\frac{h_{|V|}(\alpha - 1)}{h_{|V|}}
 \end{equation}
 
-where the $h_{|V|}=\Sigma_{d=1}^{|V|-1}d^{-\alpha}$ is the normalizing
+where the $h_{|V|}=\sum_{d=1}^{|V|-1}d^{-\alpha}$ is the normalizing
 constant of the power-law Zipf ditribution.
 
 Every cut edge contributes to storage and network overhead since
@@ -396,7 +396,7 @@ Each vertex then spans the set of machines $A(v) \subseteq \{1,\dots, p\}$
 that contain its adjacent edges. We define the balanced vertex-cut objective:
 
 \begin{equation}\label{replication_factor}
-  \min_A \frac{1}{|V|}\Sigma_{v\in V}|A(v)|
+  \min_A \frac{1}{|V|}\sum_{v\in V}|A(v)|
 \end{equation}
 \begin{equation}\label{balance_cons}
   s.t. \max_m |{e \in E | A(e)=m}|, < \lambda \frac{|E|}{p}
@@ -439,87 +439,71 @@ streaming setting. In the following theorem, we relate the
 expected normalized replication factor (Eq. \ref{replication_factor})
 to the number of machines and the power-law constant $\alpha$.
 
-Theorem 5.2(Randomized Vertex Cuts). A random
-vertex-cut on p machines has an expected replication:
-$$
-5.5
-$$
+A random vertex-cut on p machines has an expected replication:
+\begin{equation}
+  \textbf{E}[\frac{1}{|V|}\sum_{v\in V}|A(v)|] = \frac{p}{|V|}
+  \sum_{v \in V}(1 - (1-\frac{1}{p})^{D[v]}).
+\end{equation}
 
-whereD[v]denotes the degree of vertexv. For a powerlaw graph the expected replication (Fig. 6a) is determined
-entirely by the power-law constant¦Á:
-$$
-5.6
-$$
+where $D[v]$ denotes the degree of vertex $v$. For a power law graph the 
+expected replication is determined entirely by the power-law constant
+$\alpha$:
+\begin{equation}
+  \textbf{E}[\frac{1}{|V|}\sum_{v \in V}|A(v)|] =
+  p - \frac{p}{h_{|V|}(\alpha)} \sum_{d=1}^{|V| - 1} (\frac{p-1}{p})^d
+   d^{- \alpha},
+\end{equation}
 
-whereh|V|
-(¦Á)=¡Æ
-|V|?1
-d=1
-d
-?¦Á
-is the normalizing constant
+where $h_{|V|}=\sum_{d=1}^{|V|-1}d^{- \alpha}$ is the normalizing constant
 of the power-law Zipf distribution.
 
-Proof:
-$$
-5.7 - 5.12
-$$
+While lower $\alpha$ values (more high-degree vertices) imply a higher 
+replication factor the effective gains of vertex-cuts relative to edge 
+cuts actually increase with lower $\alpha$.
 
-While lower¦Ávalues (more high-degree vertices) imply a higher replication factor (Fig. 6a) the effective gains
-of vertex-cuts relative to edge cuts (Fig. 6b) actuallyincreasewith lower¦Á. In Fig. 6b we plot the ratio of the
-expected costs (comm. and storage) of random edge-cuts
-(Eq. 5.2) to the expected costs of random vertex-cuts
-(Eq. 5.6) demonstrating order of magnitude gains.
+
 Finally, the vertex cut model is also highly effective for
 regular graphs since in the event that a good edge-cut can
-be found it can be converted to a better vertex cut:
+be found it can be converted to a better vertex cut.
+For a given an edge-cut with $g$ ghosts, any vertex cut along
+the same partition boundary has strictly fewer than $g$ mirrors.
 
-Theorem 5.3.For a given an edge-cut withgghosts,any
-vertex cut along the same partition boundary has strictly
-fewer than g mirrors.
-
-$$
-proof
-$$
-
-We can improve upon the randomly constructed vertexcut by de-randomizing the edge-placement process. The
+\subsection{Greedy Vertex-Cuts}
+We can improve upon the randomly constructed vertex cut by 
+de-randomizing the edge-placement process. The
 resulting algorithm is a sequential greedy heuristic which
 places the next edge on the machine that minimizes the
 conditional expected replication factor. To construct the
-de-randomization we consider the task of placing thei+1
-edge after having placed the previousiedges. Using the
+de-randomization we consider the task of placing the $i+1$
+edge after having placed the previous $i$ edges. Using the
 conditional expectation we define the objective:
-$$
-\arg \min_k E[\Sigma_{v \in V}|A(v)| | A_i, A(e_{i+1}=k],
-$$
 
-whereAi is the assignment for the previousiedges. Using
-Theorem 5.2 to evaluate Eq. 5.13 we obtain the following
-edge placement rules for the edge(u,v):
+\begin{equation}
+  \arg \min_k E[\sum_{v \in V}|A(v)| | A_i, A(e_{i+1}=k],
+\end{equation}
 
-Case 1:If A(u)andA(v)intersect, then the edge should be
-assigned to a machine in the intersection.
-Case 2:IfA(u)andA(v)are not empty and do not intersect,
-then the edge should be assigned to one of the machines
-from the vertex with the most unassigned edges.
-Case 3:If only one of the two vertices has been assigned, then
-choose a machine from the assigned vertex.
-Case 4:If neither vertex has been assigned, then assign the
-edge to the least loaded machine.
+where $A_i$ is the assignment for the previous $i$ edges.
+we obtain the following edge placement rules for the edge
+$(u,v)$:
+
+\begin{itemize}
+  \item If $A(u)$ and $A(v)$ intersect, then the edge should be
+  assigned to a machine in the intersection.
+  \item If $A(u)$ and $A(v)$ are not empty and do not intersect,
+  then the edge should be assigned to one of the machines
+  from the vertex with the most unassigned edges.
+  \item If only one of the two vertices has been assigned, then
+  choose a machine from the assigned vertex.
+  \item If neither vertex has been assigned, then assign the
+  edge to the least loaded machine.
+\end{itemize}
+
 Because the greedy-heuristic is a de-randomization it is
 guaranteed to obtain an expected replication factor that is
 no worse than random placement and in practice can be
 much better. Unlike the randomized algorithm, which is
 embarrassingly parallel and easily distributed, the greedy
-algorithm requires coordination between machines. We
-consider two distributed implementations:
-
-Coordinated:maintains the values ofAi(v) in a distributed table. Then each machine runs the greedy
-heuristic and periodically updates the distributed table. Local caching is used to reduce communication
-at the expense of accuracy in the estimate ofAi(v).
-Oblivious:runs the greedy heuristic independently on
-each machine. Each machine maintains its own estimate ofAi
-with no additional communication.
+algorithm requires coordination between machines. 
 
 \begin{figure}
   \centering
