@@ -147,18 +147,18 @@ int main (int argc, char* argv[]){
 		converge = 0.0;	
 
 		acum++;				//counter of loops
-        int j;
+        int i;
 
-		for(int i = 1; i<M; i++){
-
-			for(j = 0; j<i; j++){
-
-
+        for (int s_index = 1; s_index <= 2 * M - 3; s_index++) {
+#pragma omp parallel for default(shared) private(i, alpha, beta, gamma, zeta, t, c, s)
+            for (i = min(s_index, M-1); i > s_index / 2 ; i--) {
+                int j = s_index - i;
+                //printf ("%d %d %d\n", s_index, i, j);
 				alpha = 0.0;
 				beta = 0.0;
 				gamma = 0.0;
                 
-#pragma omp parallel for reduction(+: alpha) reduction(+: beta) reduction(+:gamma)
+//#pragma omp parallel for reduction(+: alpha) reduction(+: beta) reduction(+:gamma)
 				for(int k = 0; k<N ; k++){
 					alpha = alpha + (U_t[i][k] * U_t[i][k]);
 					beta = beta + (U_t[j][k] * U_t[j][k]);
@@ -187,7 +187,6 @@ int main (int argc, char* argv[]){
 					V_t[j][k] = s*t + c*V_t[j][k];
 
 				}
-
 			}
 		}
 	}
@@ -361,9 +360,5 @@ int main (int argc, char* argv[]){
 
 	return 0;
 }
-
-
-
-
 
 
