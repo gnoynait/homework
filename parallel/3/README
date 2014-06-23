@@ -1,0 +1,5 @@
+1. build
+> $ make
+
+2. run
+> $ ./run.sh <matrix size>

@@ -50,6 +50,7 @@ int main (int argc, char *argv[]) {
     while (1) {
         rk2 = dot(r, r);
 
+        #pragma omp parallel for private(i)
         for (int i = 0; i < N; i++) {
             Ap[i] = dot(A[i], p);
         }
