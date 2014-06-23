@@ -123,7 +123,7 @@ void myinit()
 int main(int argc, char *argv[]) {
 	int i, j, k;
 	float x, y, v;
-	complex c0, c, d;
+//	complex c0, c, d;
 	int seed;
 
 	if(argc>1) cx = atof(argv[1]); /* center x */
@@ -131,31 +131,35 @@ int main(int argc, char *argv[]) {
 	if(argc>3) height=width=atof(argv[3]); /* rectangle height and width */
 	if(argc>4) max=atoi(argv[4]); /* maximum iterations */
 
-	for (i=0; i<n; i++) {
-		for(j=0; j<m; j++) {
+	//for (i=0; i<n; i++) {
+	//	for(j=0; j<m; j++) {
+#pragma omp parallel for default(none) private(i, j,x, y, k, v) shared(m, n, width, height, cx, cy, max, image)
+	for (seed = 0; seed < m * n; seed++) {
+		complex c0, c, d;
+		i = seed / m;
+		j = seed % m;
 
-			/* starting point */
+		/* starting point */
 
-			x= i *(width/(n-1)) + cx -width/2;
-			y= j *(height/(m-1)) + cy -height/2;
+		x= i *(width/(n-1)) + cx -width/2;
+		y= j *(height/(m-1)) + cy -height/2;
 
-			form(0,0,c);
-			form(x,y,c0);
+		form(0,0,c);
+		form(x,y,c0);
 
-			/* complex iteration */
+		/* complex iteration */
 
-			for(k=0; k<max; k++)
-			{
-				mult(c,c,d);
-				add(d,c0,c);
-				v=mag2(c);
-				if(v>4.0) break; /* assume not in set if mag > 4 */
-			}
-
-			/* assign gray level to point based on its magnitude */
-			if(v>1.0) v=1.0; /* clamp if > 1 */
-			image[i][j]=255*v;
+		for(k=0; k<max; k++)
+		{
+			mult(c,c,d);
+			add(d,c0,c);
+			v=mag2(c);
+			if(v>4.0) break; /* assume not in set if mag > 4 */
 		}
+
+		/* assign gray level to point based on its magnitude */
+		if(v>1.0) v=1.0; /* clamp if > 1 */
+		image[i][j]=255*v;
 	}
 #ifdef LOCAL
 	for (i = 0; i < n; i++) {
